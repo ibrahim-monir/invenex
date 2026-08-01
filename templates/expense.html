@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Expense - Invenex{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+  <h3 class="mb-0"><i class="bi bi-receipt text-danger"></i> Expense <span class="badge bg-danger fs-6 fw-normal">৳{{ "%.2f"|format(total) }}</span></h3>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="{{ url_for('export_expense', **filters) }}" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Export CSV</a>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal"><i class="bi bi-plus-lg"></i> New Expense</button>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+<form method="get" class="row g-2 align-items-end">
+  <div class="col-md-3">
+    <label class="form-label mb-0 small">Search</label>
+    <input type="text" name="q" class="form-control form-control-sm" placeholder="Purpose/note diye search" value="{{ filters.get('q', '') }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label mb-0 small">Category</label>
+    <select name="category" class="form-select form-select-sm">
+      <option value="">All</option>
+      {% for cat in categories %}
+      <option value="{{ cat }}" {{ 'selected' if filters.get('category') == cat else '' }}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label mb-0 small">From</label>
+    <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.get('date_from', '') }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label mb-0 small">To</label>
+    <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.get('date_to', '') }}">
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+    <a href="{{ url_for('expense') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+  </div>
+</form>
+</div>
+
+<div class="card p-3">
+  <div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Purpose</th>
+        <th>Category</th>
+        <th>Note</th>
+        <th class="text-end">Amount</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr>
+        <td>{{ entry.entry_date }}</td>
+        <td>{{ entry.purpose }}</td>
+        <td>{{ entry.category or "" }}</td>
+        <td class="text-muted">{{ entry.note or "" }}</td>
+        <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+        <td class="text-end">
+          <form method="post" action="{{ url_for('delete_expense', entry_id=entry.id) }}" class="d-inline" onsubmit="return confirm('Entry ta delete korte chan?');">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-muted">Kono expense entry pawa jayni.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="modal fade" id="addExpenseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('add_expense') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New Expense</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Purpose</label>
+          <input type="text" name="purpose" class="form-control" placeholder="ex: Rent, Supplier Payment" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Category (optional)</label>
+          <input type="text" name="category" class="form-control" list="expenseCategoryList" placeholder="ex: Rent, Utility, Salary">
+          <datalist id="expenseCategoryList">
+            {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">Amount</label>
+            <input type="number" step="0.01" name="amount" class="form-control" required>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Date</label>
+            <input type="date" name="entry_date" class="form-control" value="{{ today }}">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Note (optional)</label>
+          <input type="text" name="note" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

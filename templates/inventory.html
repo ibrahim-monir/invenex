@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}Inventory - Invenex{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+  <h3 class="mb-0"><i class="bi bi-box-seam text-warning"></i> Inventory</h3>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="{{ url_for('export_inventory', **filters) }}" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Export CSV</a>
+    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#quickStockOutModal"><i class="bi bi-box-arrow-up"></i> Stock Out</button>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-box-arrow-in-down"></i> Stock In</button>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+<form method="get" class="row g-2 align-items-end">
+  <div class="col-md-4">
+    <label class="form-label mb-0 small">Search</label>
+    <input type="text" name="q" class="form-control form-control-sm" placeholder="Item name diye search" value="{{ filters.get('q', '') }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label mb-0 small">Category</label>
+    <select name="category" class="form-select form-select-sm">
+      <option value="">All</option>
+      {% for cat in categories %}
+      <option value="{{ cat }}" {{ 'selected' if filters.get('category') == cat else '' }}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3 form-check ms-2">
+    <input type="checkbox" name="low_stock" value="1" class="form-check-input" id="lowStockOnly" {{ 'checked' if filters.get('low_stock') == '1' else '' }}>
+    <label class="form-check-label small" for="lowStockOnly">Low stock only</label>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+    <a href="{{ url_for('inventory') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+  </div>
+</form>
+</div>
+
+<div class="card p-3">
+  <div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>SKU</th>
+        <th>Category</th>
+        <th>Unit</th>
+        <th>Current Quantity</th>
+        <th>Low Stock At</th>
+        <th class="text-end">Buying Price</th>
+        <th class="text-end">Selling Price</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.sku or "" }}</td>
+        <td>{{ item.category or "" }}</td>
+        <td>{{ item.unit }}</td>
+        <td>
+          {% if item.is_low_stock %}
+            <span class="low-stock-badge">{{ item.quantity }}</span>
+          {% else %}
+            {{ item.quantity }}
+          {% endif %}
+        </td>
+        <td>{{ item.low_stock_threshold }}</td>
+        <td class="text-end">{{ "৳%.2f"|format(item.buying_price) if item.buying_price is not none else "" }}</td>
+        <td class="text-end">{{ "৳%.2f"|format(item.selling_price) if item.selling_price is not none else "" }}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#stockModal{{ item.id }}"><i class="bi bi-arrow-left-right"></i> Stock In/Out</button>
+          <form method="post" action="{{ url_for('delete_item', item_id=item.id) }}" class="d-inline" onsubmit="return confirm('Item ta delete korte chan?');">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-center text-muted">Kono item pawa jayni.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Quick Stock Out Modal (sponsor/influencer, damaged, samples, etc.) -->
+<div class="modal fade" id="quickStockOutModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('quick_stock_out') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Stock Out</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Free-e deya item (sponsor, influencer, sample), damaged, ba onno adjustment-er jonno &mdash; eta kono income create kore na.</p>
+        <div class="mb-3">
+          <label class="form-label">Item</label>
+          <select name="item_id" class="form-select" required>
+            <option value="" disabled selected>Select item</option>
+            {% for item in all_items %}
+            <option value="{{ item.id }}">{{ item.name }} ({{ item.quantity }} {{ item.unit }} available)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">Quantity</label>
+            <input type="number" name="quantity" class="form-control" min="1" required>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Date</label>
+            <input type="date" name="entry_date" class="form-control" value="{{ today }}">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Category</label>
+          <select name="movement_type" class="form-select" required>
+            <option value="sponsor">Sponsor/Influencer (Free)</option>
+            <option value="damaged">Damaged</option>
+            <option value="personal_use">Personal Use</option>
+            <option value="sample_gift">Sample/Gift</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Note (optional)</label>
+          <input type="text" name="note" class="form-control" placeholder="ex: Influencer/customer naam">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-danger">Confirm Stock Out</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Stock In Modal -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="post" action="{{ url_for('add_item') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-box-arrow-in-down"></i> Stock In - New Product</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <h6 class="text-muted small text-uppercase mb-2">Purchase Info</h6>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Supplier</label>
+            <input type="text" name="supplier" class="form-control" placeholder="ex: ABC Trading">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Purchase Order No</label>
+            <input type="text" name="po_number" class="form-control" placeholder="ex: PO-1024">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Purchase Order Batch</label>
+            <input type="text" name="po_batch" class="form-control" placeholder="ex: Batch-A">
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="text-muted small text-uppercase mb-2">Product Info</h6>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Product Name</label>
+            <input type="text" name="name" class="form-control" required>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">SKU</label>
+            <input type="text" name="sku" class="form-control" placeholder="ex: SKU-001">
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Category</label>
+            <input type="text" name="category" class="form-control" list="itemCategoryList" placeholder="ex: Electronics">
+            <datalist id="itemCategoryList">
+              {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
+            </datalist>
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="text-muted small text-uppercase mb-2">Pricing</h6>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Buying Price (per unit)</label>
+            <input type="number" step="0.01" name="buying_price" class="form-control" min="0" placeholder="0.00">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Selling Price (per unit)</label>
+            <input type="number" step="0.01" name="selling_price" class="form-control" min="0" placeholder="0.00">
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="text-muted small text-uppercase mb-2">Stock</h6>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Unit Quantity</label>
+            <input type="number" name="quantity" class="form-control" value="0" min="0" required>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Unit</label>
+            <input type="text" name="unit" class="form-control" value="pcs">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Low Stock Alert At</label>
+            <input type="number" name="low_stock_threshold" class="form-control" value="5" min="0">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<datalist id="stockReasonList">
+  <option value="Sponsor/Influencer (Free)">
+  <option value="Damaged">
+  <option value="Personal Use">
+  <option value="Restock">
+  <option value="Sample/Gift">
+</datalist>
+
+<!-- Stock In/Out Modals -->
+{% for item in items %}
+<div class="modal fade" id="stockModal{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('update_stock', item_id=item.id) }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ item.name }} - Stock Update</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">Current quantity: <strong>{{ item.quantity }} {{ item.unit }}</strong></p>
+        <div class="mb-3">
+          <label class="form-label">Type</label>
+          <select name="change_type" class="form-select" required>
+            <option value="out">Stock Out (less holo)</option>
+            <option value="in">Stock In (restock)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Quantity</label>
+          <input type="number" name="quantity" class="form-control" min="1" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Date</label>
+          <input type="date" name="entry_date" class="form-control" value="{{ today }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Reason / Note</label>
+          <input type="text" name="reason" class="form-control" list="stockReasonList" placeholder="ex: Sponsor/Influencer (Free), Damaged, Restock">
+          <div class="form-text">Bikri (Sale) hole ei form na use kore "Record Sale" button use korun &mdash; eta free-e deya item (sponsor, sample) ba onno adjustment-er jonno.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Update Stock</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

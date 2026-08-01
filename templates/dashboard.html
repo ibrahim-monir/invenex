@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Invenex{% endblock %}
+{% block content %}
+<h3 class="mb-4">Dashboard</h3>
+
+<h6 class="text-muted text-uppercase small mb-2">Financial Overview</h6>
+<div class="row g-3 mb-4 row-cols-1 row-cols-md-3">
+  <div class="col">
+    <div class="stat-card bg-blue">
+      <div class="stat-top">
+        <div>
+          <div class="label">Total Income</div>
+          <div class="value">৳{{ "%.2f"|format(total_income) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-cash-stack"></i></div>
+      </div>
+      <div class="stat-subtitle">
+        {% if not (income_trend.direction == 'flat' and income_trend.pct is none) %}
+          {% if income_trend.direction == 'up' %}<i class="bi bi-arrow-up-right"></i>
+          {% elif income_trend.direction == 'down' %}<i class="bi bi-arrow-down-right"></i>
+          {% else %}<i class="bi bi-dash-lg"></i>{% endif %}
+          {% if income_trend.pct is not none %}{{ "%+.0f"|format(income_trend.pct) }}%{% else %}New{% endif %} vs last month
+        {% else %}
+          All-time total
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-red">
+      <div class="stat-top">
+        <div>
+          <div class="label">Total Expense</div>
+          <div class="value">৳{{ "%.2f"|format(total_expense) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-wallet2"></i></div>
+      </div>
+      <div class="stat-subtitle">
+        {% if not (expense_trend.direction == 'flat' and expense_trend.pct is none) %}
+          {% if expense_trend.direction == 'up' %}<i class="bi bi-arrow-up-right"></i>
+          {% elif expense_trend.direction == 'down' %}<i class="bi bi-arrow-down-right"></i>
+          {% else %}<i class="bi bi-dash-lg"></i>{% endif %}
+          {% if expense_trend.pct is not none %}{{ "%+.0f"|format(expense_trend.pct) }}%{% else %}New{% endif %} vs last month
+        {% else %}
+          All-time total
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-green">
+      <div class="stat-top">
+        <div>
+          <div class="label">Current Balance</div>
+          <div class="value">৳{{ "%.2f"|format(balance) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-piggy-bank"></i></div>
+      </div>
+      <div class="stat-subtitle">Income minus expense</div>
+    </div>
+  </div>
+</div>
+
+<h6 class="text-muted text-uppercase small mb-2">Inventory &amp; Sales Overview</h6>
+<div class="row g-3 mb-4 row-cols-2 row-cols-lg-5">
+  <div class="col">
+    <div class="stat-card bg-teal">
+      <div class="stat-top">
+        <div>
+          <div class="label">Stock Remaining</div>
+          <div class="value">{{ total_stock_remaining }} <span class="fs-6 fw-normal">pcs</span></div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-box-seam"></i></div>
+      </div>
+      <div class="stat-subtitle">Out of {{ total_stock_initial }} pcs initial</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-orange">
+      <div class="stat-top">
+        <div>
+          <div class="label">Low Stock Items</div>
+          <div class="value">{{ low_stock_items|length }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-exclamation-triangle"></i></div>
+      </div>
+      <div class="stat-subtitle">Out of {{ total_items }} total items</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-cyan">
+      <div class="stat-top">
+        <div>
+          <div class="label">Units Sold</div>
+          <div class="value">{{ total_units_sold }} <span class="fs-6 fw-normal">pcs</span></div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-graph-up-arrow"></i></div>
+      </div>
+      <div class="stat-subtitle">Across all recorded days</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-purple">
+      <div class="stat-top">
+        <div>
+          <div class="label">Due Sales</div>
+          <div class="value">৳{{ "%.2f"|format(due_total) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-hourglass-split"></i></div>
+      </div>
+      <div class="stat-subtitle">{{ due_sales|length }} pending payment{{ 's' if due_sales|length != 1 else '' }}</div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-amber">
+      <div class="stat-top">
+        <div>
+          <div class="label">Sponsor/Influencer</div>
+          <div class="value">{{ total_sponsor_given }} <span class="fs-6 fw-normal">pcs</span></div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-gift"></i></div>
+      </div>
+      <div class="stat-subtitle">Free samples &amp; sponsorships</div>
+    </div>
+  </div>
+</div>
+
+<h6 class="text-muted text-uppercase small mb-2">Recent Activity</h6>
+<div class="row g-3 mb-1">
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header-colored orange">
+        <i class="bi bi-box-seam"></i> Inventory
+        <a href="{{ url_for('inventory') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="p-3">
+        <p class="mb-2">Total items: <strong>{{ total_items }}</strong></p>
+        {% if low_stock_items %}
+          <p class="text-muted small mb-1">Low stock:</p>
+          <ul class="list-unstyled mb-0">
+            {% for item in low_stock_items %}
+              <li class="mb-1"><span class="low-stock-badge">{{ item.quantity }} {{ item.unit }}</span> {{ item.name }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted mb-0">Kono item low stock e nei.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header-colored gray">
+        <i class="bi bi-arrow-left-right"></i> Recent Stock Movement
+        <a href="{{ url_for('stock_report_page') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if recent_stock_logs %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Qty</th></tr></thead>
+          <tbody>
+          {% for log in recent_stock_logs %}
+            <tr>
+              <td>{{ log.entry_date }}</td>
+              <td>{{ log.item.name if log.item else "Deleted item" }}</td>
+              <td>
+                {% if log.change_type == "in" %}
+                  <span class="badge bg-success">IN</span>
+                {% else %}
+                  <span class="badge bg-danger">OUT</span>
+                {% endif %}
+              </td>
+              <td>{{ log.quantity }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono stock movement nei.</p>
+      {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-colored green">
+        <i class="bi bi-cart-check"></i> Recent Sales
+        <a href="{{ url_for('sale_page') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if recent_sales %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Item</th><th class="text-end">Amount</th><th>Status</th></tr></thead>
+          <tbody>
+          {% for sale in recent_sales %}
+            <tr>
+              <td>{{ sale.sale_date }}</td>
+              <td>{{ sale.item.name if sale.item else "Deleted item" }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(sale.amount) }}</td>
+              <td>
+                {% if sale.status == "complete" %}
+                  <span class="badge bg-success">Complete</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark">Due</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono sale record kora hoyni.</p>
+      {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header-colored blue">
+        <i class="bi bi-graph-up-arrow"></i> Recent Income
+        <a href="{{ url_for('income') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if recent_income %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Purpose</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+          {% for entry in recent_income %}
+            <tr>
+              <td>{{ entry.entry_date }}</td>
+              <td>{{ entry.purpose }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono income entry nei.</p>
+      {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-colored red">
+        <i class="bi bi-receipt"></i> Recent Expense
+        <a href="{{ url_for('expense') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if recent_expense %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Purpose</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+          {% for entry in recent_expense %}
+            <tr>
+              <td>{{ entry.entry_date }}</td>
+              <td>{{ entry.purpose }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono expense entry nei.</p>
+      {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<h6 class="text-muted text-uppercase small mb-2 mt-3">Action Needed</h6>
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header-colored orange">
+        <i class="bi bi-hourglass-split"></i> Due Sales
+        <span class="badge bg-light text-dark ms-2">৳{{ "%.2f"|format(due_total) }}</span>
+        <a href="{{ url_for('sale_page') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if due_sales %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Item</th><th>Customer</th><th>Qty</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+          {% for sale in due_sales %}
+            <tr>
+              <td>{{ sale.sale_date }}</td>
+              <td>{{ sale.item.name if sale.item else "Deleted item" }}</td>
+              <td>{{ sale.customer_name or "" }}</td>
+              <td>{{ sale.quantity }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(sale.amount) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono due sale nei.</p>
+      {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

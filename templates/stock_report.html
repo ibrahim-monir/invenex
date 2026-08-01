@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Report - Invenex{% endblock %}
+{% block content %}
+<h3 class="mb-3"><i class="bi bi-clock-history text-secondary"></i> Report</h3>
+
+<div class="card">
+  <div class="card-header-colored gray">
+    <i class="bi bi-clock-history"></i> Stock Movement History
+    <a href="{{ url_for('export_stock_history', **filters) }}" class="btn btn-sm btn-light ms-auto"><i class="bi bi-download"></i> Export CSV</a>
+  </div>
+  <div class="p-3 pb-0">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4 col-lg-3">
+        <label class="form-label mb-0 small">Search (item ba reason)</label>
+        <input type="text" name="stock_q" class="form-control form-control-sm" placeholder="ex: Sponsor" value="{{ filters.get('stock_q', '') }}">
+      </div>
+      <div class="col-md-2 col-lg-1">
+        <label class="form-label mb-0 small">Type</label>
+        <select name="stock_type" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="in" {{ 'selected' if filters.get('stock_type') == 'in' else '' }}>Stock In</option>
+          <option value="out" {{ 'selected' if filters.get('stock_type') == 'out' else '' }}>Stock Out</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label mb-0 small">Category</label>
+        <select name="stock_category" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for key, label in movement_type_labels.items() %}
+          <option value="{{ key }}" {{ 'selected' if filters.get('stock_category') == key else '' }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label mb-0 small">From</label>
+        <input type="date" name="stock_date_from" class="form-control form-control-sm" value="{{ filters.get('stock_date_from', '') }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label mb-0 small">To</label>
+        <input type="date" name="stock_date_to" class="form-control form-control-sm" value="{{ filters.get('stock_date_to', '') }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+        <a href="{{ url_for('stock_report_page') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+  <div class="table-responsive">
+  <table class="table align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Item</th>
+        <th>Type</th>
+        <th>Category</th>
+        <th>Qty</th>
+        <th>Reason</th>
+        <th>Supplier / PO Ref</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in stock_logs %}
+      <tr>
+        <td>{{ log.entry_date }}</td>
+        <td>{{ log.item.name if log.item else "Deleted item" }}</td>
+        <td>
+          {% if log.change_type == "in" %}
+            <span class="badge bg-success">IN</span>
+          {% else %}
+            <span class="badge bg-danger">OUT</span>
+          {% endif %}
+        </td>
+        <td>{{ movement_type_labels.get(log.movement_type, "") }}</td>
+        <td>{{ log.quantity }}</td>
+        <td>{{ log.reason or "" }}</td>
+        <td>
+          {%- if log.supplier or log.po_number or log.po_batch -%}
+            {{ log.supplier or "" }}{% if log.po_number %} ({{ log.po_number }}{% if log.po_batch %} / {{ log.po_batch }}{% endif %}){% elif log.po_batch %} ({{ log.po_batch }}){% endif %}
+          {%- endif -%}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted">Kono stock movement pawa jayni.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

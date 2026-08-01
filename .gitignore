@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+instance/
+*.db
+.DS_Store
+*.log
+*.zip
+cloudflared.exe
+data/
+static/uploads/*

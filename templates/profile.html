@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Profile - Invenex{% endblock %}
+{% block content %}
+<h3 class="mb-4"><i class="bi bi-person-gear text-primary"></i> Profile Settings</h3>
+
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card p-4">
+      <form method="post" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
+        <div class="text-center mb-4">
+          {% if profile.avatar_filename %}
+            <img src="{{ url_for('static', filename='uploads/' + profile.avatar_filename) }}"
+                 class="rounded-circle mb-2" style="width:100px;height:100px;object-fit:cover;" alt="Avatar">
+          {% else %}
+            <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white mb-2" style="width:100px;height:100px;">
+              <i class="bi bi-person-fill" style="font-size:2.5rem;"></i>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Display Name</label>
+          <input type="text" name="display_name" class="form-control" value="{{ profile.display_name or '' }}" placeholder="ex: Nishat Urmi" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Profile Picture</label>
+          <input type="file" name="avatar" class="form-control" accept=".png,.jpg,.jpeg,.gif,.webp">
+          <div class="form-text">PNG, JPG, GIF ba WEBP &middot; max 2MB</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg"></i> Save Changes</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

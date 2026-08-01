@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Invenex{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --sidebar-width: 235px;
+      --topbar-height: 58px;
+      --color-primary: #2a78d6;
+      --color-primary-dark: #184f95;
+      --color-danger: #e34948;
+      --color-success: #1baf7a;
+      --color-warning: #eda100;
+      --color-bg: #f4f6f9;
+    }
+    body { background: var(--color-bg); display: flex; flex-direction: column; min-height: 100vh; }
+
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-height);
+      background: var(--color-primary); color: #fff; display: flex; align-items: center;
+      padding: 0 1rem; z-index: 1030; box-shadow: 0 1px 6px rgba(0,0,0,.15);
+    }
+    .topbar .brand { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: .5rem; color: #fff; text-decoration: none; }
+    .topbar .brand:hover { color: #fff; }
+    .topbar .spacer { flex: 1; }
+    .topbar a { color: #fff; }
+    .topbar .dropdown-menu a { color: var(--bs-dropdown-link-color, #212529); }
+    .sidebar-toggle { display: none; background: transparent; border: none; color: #fff; font-size: 1.4rem; margin-right: .75rem; }
+
+    .sidebar {
+      position: fixed; top: var(--topbar-height); left: 0; bottom: 0; width: var(--sidebar-width);
+      background: #fff; border-right: 1px solid #e5e7eb; overflow-y: auto;
+      padding-top: .75rem; z-index: 1020; transition: transform .2s ease;
+    }
+    .sidebar .nav-link {
+      color: #495057; padding: .65rem 1.25rem; display: flex; align-items: center; gap: .7rem;
+      font-size: .93rem; border-left: 3px solid transparent;
+    }
+    .sidebar .nav-link i { font-size: 1.05rem; width: 1.2rem; text-align: center; color: #9aa2b1; }
+    .sidebar .nav-link:hover { background: #f4f6f9; }
+    .sidebar .nav-link.active { background: #eaf2fd; border-left-color: var(--color-primary); color: var(--color-primary); font-weight: 600; }
+    .sidebar .nav-link.active i { color: var(--color-primary); }
+    .sidebar .submenu-toggle .chevron { transition: transform .2s ease; font-size: .8rem; }
+    .sidebar .submenu-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .sidebar .submenu-link { padding-left: 2.7rem; font-size: .87rem; }
+
+    .content-wrap { margin-left: var(--sidebar-width); margin-top: var(--topbar-height); padding: 1.5rem; flex: 1 0 auto; }
+
+    .app-footer { flex-shrink: 0; padding: 1rem 1.5rem; text-align: center; color: #6c757d; font-size: .85rem; border-top: 1px solid #e5e7eb; background: #fff; }
+    .app-footer.with-sidebar { margin-left: var(--sidebar-width); }
+    .app-footer a { color: var(--color-primary); text-decoration: none; }
+
+    @media (max-width: 900px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); box-shadow: 2px 0 10px rgba(0,0,0,.2); }
+      .content-wrap { margin-left: 0; }
+      .app-footer.with-sidebar { margin-left: 0; }
+      .sidebar-toggle { display: inline-block; }
+    }
+
+    .card { border: none; border-radius: .6rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+    /* Colorful stat cards */
+    .stat-card { border: none; border-radius: .6rem; color: #fff; padding: 1.25rem; box-shadow: 0 3px 8px rgba(0,0,0,.12); }
+    .stat-card .stat-top { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+    .stat-card .icon-badge { width: 42px; height: 42px; min-width: 42px; border-radius: 50%; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 1.15rem; }
+    .stat-card .label { font-size: .8rem; opacity: .85; margin-bottom: .35rem; }
+    .stat-card .value { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+    .stat-card .stat-subtitle { font-size: .75rem; opacity: .75; margin-top: .6rem; padding-top: .5rem; border-top: 1px solid rgba(255,255,255,.18); display: flex; align-items: center; gap: .25rem; }
+    .stat-card.bg-blue { background: linear-gradient(135deg, #2a78d6, #184f95); }
+    .stat-card.bg-red { background: linear-gradient(135deg, #e34948, #a92e2d); }
+    .stat-card.bg-green { background: linear-gradient(135deg, #1baf7a, #0d8a5c); }
+    .stat-card.bg-orange { background: linear-gradient(135deg, #eda100, #c07f00); }
+    .stat-card.bg-purple { background: linear-gradient(135deg, #6a4ac7, #4a3aa7); }
+    .stat-card.bg-teal { background: linear-gradient(135deg, #14b8a6, #0d7d70); }
+    .stat-card.bg-cyan { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+    .stat-card.bg-amber { background: linear-gradient(135deg, #f59e0b, #b45309); }
+
+    /* Colored card headers */
+    .card-header-colored { padding: .75rem 1rem; color: #fff; font-weight: 600; border-radius: .6rem .6rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .card-header-colored.blue { background: var(--color-primary); }
+    .card-header-colored.red { background: var(--color-danger); }
+    .card-header-colored.orange { background: var(--color-warning); }
+    .card-header-colored.gray { background: #6c757d; }
+    .card-header-colored.green { background: var(--color-success); }
+    .card-header-colored .btn-light { color: #212529; }
+    .card-body-flush { border-radius: 0 0 .6rem .6rem; overflow: hidden; }
+
+    .low-stock-badge { background: var(--color-danger); color: #fff; padding: .2rem .5rem; border-radius: .35rem; font-size: .8rem; font-weight: 600; }
+
+    /* Let wide tables scroll horizontally instead of squeezing/wrapping columns on small screens */
+    .table-responsive table { min-width: 640px; }
+    .table-responsive table.table-sm { min-width: 480px; }
+    .table-responsive table th { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  {% if current_user.is_authenticated %}
+  <header class="topbar">
+    <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu"><i class="bi bi-list"></i></button>
+    <a class="brand" href="{{ url_for('dashboard') }}"><i class="bi bi-boxes"></i> Invenex</a>
+    <div class="spacer"></div>
+    <div class="dropdown">
+      <a class="dropdown-toggle text-decoration-none text-white d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
+        {% if admin_avatar %}
+          <img src="{{ url_for('static', filename='uploads/' + admin_avatar) }}" class="rounded-circle" style="width:28px;height:28px;object-fit:cover;" alt="Avatar">
+        {% else %}
+          <i class="bi bi-person-circle fs-5"></i>
+        {% endif %}
+        <span class="d-none d-sm-inline">{{ admin_display_name }}</span>
+      </a>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="bi bi-person-gear me-2"></i>Profile Settings</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <nav class="sidebar" id="sidebar">
+    <a class="nav-link {{ 'active' if request.endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
+      <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+    {% set inventory_active = request.endpoint in ('inventory', 'sale_page', 'stock_report_page') %}
+    <a class="nav-link submenu-toggle {{ 'active' if inventory_active else '' }}" data-bs-toggle="collapse" href="#inventorySubmenu" role="button" aria-expanded="{{ 'true' if inventory_active else 'false' }}">
+      <i class="bi bi-box-seam"></i> Inventory <i class="bi bi-chevron-down chevron ms-auto"></i>
+    </a>
+    <div class="collapse {{ 'show' if inventory_active else '' }}" id="inventorySubmenu">
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'inventory' else '' }}" href="{{ url_for('inventory') }}">
+        <i class="bi bi-box-seam"></i> Items
+      </a>
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'sale_page' else '' }}" href="{{ url_for('sale_page') }}">
+        <i class="bi bi-cart-check"></i> Sale
+      </a>
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'stock_report_page' else '' }}" href="{{ url_for('stock_report_page') }}">
+        <i class="bi bi-clock-history"></i> Report
+      </a>
+    </div>
+    {% set accounts_active = request.endpoint in ('income', 'expense') %}
+    <a class="nav-link submenu-toggle {{ 'active' if accounts_active else '' }}" data-bs-toggle="collapse" href="#accountsSubmenu" role="button" aria-expanded="{{ 'true' if accounts_active else 'false' }}">
+      <i class="bi bi-wallet2"></i> Accounts <i class="bi bi-chevron-down chevron ms-auto"></i>
+    </a>
+    <div class="collapse {{ 'show' if accounts_active else '' }}" id="accountsSubmenu">
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'income' else '' }}" href="{{ url_for('income') }}">
+        <i class="bi bi-graph-up-arrow"></i> Income
+      </a>
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'expense' else '' }}" href="{{ url_for('expense') }}">
+        <i class="bi bi-receipt"></i> Expense
+      </a>
+    </div>
+  </nav>
+  {% endif %}
+
+  <div class="{{ 'content-wrap' if current_user.is_authenticated else 'container' }}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer class="app-footer {{ 'with-sidebar' if current_user.is_authenticated else '' }}">
+    &copy; {{ current_year }} Invenex &middot; Inventory, Income &amp; Expense Manager
+    &middot; Developed by <a href="https://ibrahimmonir.com" target="_blank" rel="noopener">Ibrahim Monir</a>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const toggleBtn = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    if (toggleBtn && sidebar) {
+      toggleBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
+    }
+
+    document.querySelectorAll('.topbar .dropdown').forEach(function (container) {
+      const toggleEl = container.querySelector('[data-bs-toggle="dropdown"]');
+      if (!toggleEl) return;
+      const dropdown = bootstrap.Dropdown.getOrCreateInstance(toggleEl);
+      let closeTimer;
+      container.addEventListener('mouseenter', () => {
+        clearTimeout(closeTimer);
+        dropdown.show();
+      });
+      container.addEventListener('mouseleave', () => {
+        closeTimer = setTimeout(() => dropdown.hide(), 150);
+      });
+    });
+  </script>
+</body>
+</html>
