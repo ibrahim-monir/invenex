@@ -1,10 +1,13 @@
 import csv
 import io
 import os
+from calendar import month_abbr
 from datetime import date, datetime
 
 from dotenv import load_dotenv
 from flask import Flask, Response, flash, redirect, render_template, request, url_for
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -17,12 +20,13 @@ from sqlalchemy import func, inspect, text
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-from models import Expense, Income, Item, Profile, Sale, StockLog, db
+from models import Expense, Income, Item, Profile, Purchase, PurchaseLine, Sale, StockLog, Supplier, db
 
 ALLOWED_AVATAR_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 MOVEMENT_TYPE_LABELS = {
     "sale": "Sale",
+    "purchase": "Purchase",
     "restock": "Restock",
     "sponsor": "Sponsor/Influencer",
     "damaged": "Damaged",
@@ -107,6 +111,7 @@ def _add_missing_columns():
             ("sku", "VARCHAR(60)"),
             ("buying_price", "FLOAT"),
             ("selling_price", "FLOAT"),
+            ("discount_price", "FLOAT"),
         ],
         "income": [("category", "VARCHAR(80)")],
         "expenses": [("category", "VARCHAR(80)")],
@@ -400,7 +405,7 @@ def export_inventory():
     items = _filtered_items()
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Item", "SKU", "Category", "Unit", "Current Quantity", "Low Stock Threshold", "Buying Price", "Selling Price"])
+    writer.writerow(["Item", "SKU", "Category", "Unit", "Current Quantity", "Low Stock Threshold", "Buying Price", "Regular Sale Price", "Discount Sale Price"])
     for item in items:
         writer.writerow([
             item.name,
@@ -411,6 +416,7 @@ def export_inventory():
             item.low_stock_threshold,
             item.buying_price if item.buying_price is not None else "",
             item.selling_price if item.selling_price is not None else "",
+            item.discount_price if item.discount_price is not None else "",
         ])
     return Response(
         output.getvalue(),
@@ -430,12 +436,17 @@ def add_item():
     threshold = request.form.get("low_stock_threshold", "5")
     buying_price = request.form.get("buying_price", "").strip()
     selling_price = request.form.get("selling_price", "").strip()
+    discount_price = request.form.get("discount_price", "").strip()
     supplier = request.form.get("supplier", "").strip()
     po_number = request.form.get("po_number", "").strip()
     po_batch = request.form.get("po_batch", "").strip()
 
     if not name:
         flash("Item er naam dite hobe.", "danger")
+        return redirect(url_for("inventory"))
+
+    if sku and Item.query.filter(func.lower(Item.sku) == sku.lower()).first():
+        flash(f"SKU '{sku}' already ekta item-e use hoyeche. Onno SKU diye try korun.", "danger")
         return redirect(url_for("inventory"))
 
     quantity_int = int(quantity or 0)
@@ -448,6 +459,7 @@ def add_item():
         low_stock_threshold=int(threshold or 5),
         buying_price=float(buying_price) if buying_price else None,
         selling_price=float(selling_price) if selling_price else None,
+        discount_price=float(discount_price) if discount_price else None,
     )
     db.session.add(item)
     db.session.flush()
@@ -627,11 +639,39 @@ def update_sale(sale_id):
     if sale_date:
         sale.sale_date = date.fromisoformat(sale_date)
 
+    quantity = request.form.get("quantity")
+    if quantity:
+        new_quantity = int(quantity)
+        if new_quantity > 0 and new_quantity != sale.quantity:
+            item = Item.query.get(sale.item_id)
+            if item:
+                item.quantity += sale.quantity - new_quantity
+            if sale.stock_log_id:
+                stock_log = StockLog.query.get(sale.stock_log_id)
+                if stock_log:
+                    stock_log.quantity = new_quantity
+                    stock_log.entry_date = sale.sale_date
+            sale.quantity = new_quantity
+
     new_status = request.form.get("status", sale.status)
     if new_status == "complete" and sale.status == "due":
         item = Item.query.get(sale.item_id)
         _create_income_for_sale(sale, item)
         sale.status = "complete"
+    elif new_status == "due" and sale.status == "complete":
+        if sale.income_id:
+            income = Income.query.get(sale.income_id)
+            if income:
+                db.session.delete(income)
+            sale.income_id = None
+        sale.status = "due"
+    elif sale.status == "complete" and sale.income_id:
+        # Keep the linked income entry in sync with any edited amount/date/customer.
+        income = Income.query.get(sale.income_id)
+        if income:
+            income.amount = sale.amount
+            income.entry_date = sale.sale_date
+            income.note = sale.customer_name
 
     db.session.commit()
     flash("Sale update kora hoyeche.", "success")
@@ -657,6 +697,490 @@ def delete_sale(sale_id):
     db.session.commit()
     flash("Sale entry delete kora hoyeche.", "info")
     return redirect(url_for("sale_page"))
+
+
+# ---------- Purchases ----------
+
+def _create_expense_for_purchase(purchase):
+    expense = Expense(
+        purpose=f"Purchase - {purchase.supplier.name if purchase.supplier else 'Supplier'}",
+        category="Purchase",
+        amount=purchase.total_amount,
+        entry_date=purchase.purchase_date,
+        note=f"PO: {purchase.po_number}" if purchase.po_number else None,
+    )
+    db.session.add(expense)
+    db.session.flush()
+    purchase.expense_id = expense.id
+
+
+@app.route("/suppliers/add", methods=["POST"])
+@login_required
+def add_supplier():
+    name = request.form.get("name", "").strip()
+    contact = request.form.get("contact", "").strip()
+    notes = request.form.get("notes", "").strip()
+
+    if not name:
+        flash("Supplier naam dite hobe.", "danger")
+        return redirect(url_for("purchase_page"))
+
+    if Supplier.query.filter(func.lower(Supplier.name) == name.lower()).first():
+        flash(f"Supplier '{name}' already ache.", "danger")
+        return redirect(url_for("purchase_page"))
+
+    db.session.add(Supplier(name=name, contact=contact or None, notes=notes or None))
+    db.session.commit()
+    flash(f"Supplier '{name}' add kora hoyeche.", "success")
+    return redirect(url_for("purchase_page"))
+
+
+@app.route("/purchases")
+@login_required
+def purchase_page():
+    purchases = Purchase.query.order_by(Purchase.purchase_date.desc(), Purchase.id.desc()).all()
+    suppliers = Supplier.query.order_by(Supplier.name).all()
+    all_items = Item.query.order_by(Item.name).all()
+    due_total = sum(p.total_amount for p in purchases if p.status == "due")
+    return render_template(
+        "purchase_page.html",
+        purchases=purchases,
+        suppliers=suppliers,
+        all_items=all_items,
+        due_total=due_total,
+        today=date.today().isoformat(),
+    )
+
+
+@app.route("/purchases/add", methods=["POST"])
+@login_required
+def add_purchase():
+    supplier_id = request.form.get("supplier_id")
+    if not supplier_id:
+        flash("Supplier select korte hobe.", "danger")
+        return redirect(url_for("purchase_page"))
+    supplier = Supplier.query.get_or_404(int(supplier_id))
+
+    po_number = request.form.get("po_number", "").strip()
+    po_batch = request.form.get("po_batch", "").strip()
+    purchase_date = request.form.get("purchase_date") or date.today().isoformat()
+    status = request.form.get("status", "due")
+    if status not in ("due", "paid"):
+        status = "due"
+    note = request.form.get("note", "").strip()
+    purchase_date_obj = date.fromisoformat(purchase_date)
+
+    item_ids = request.form.getlist("item_id[]")
+    quantities = request.form.getlist("quantity[]")
+    unit_prices = request.form.getlist("unit_price[]")
+
+    lines_data = []
+    for item_id, qty, price in zip(item_ids, quantities, unit_prices):
+        if not item_id or not qty or not price:
+            continue
+        qty_int = int(qty)
+        price_float = float(price)
+        if qty_int <= 0 or price_float < 0:
+            continue
+        lines_data.append((int(item_id), qty_int, price_float))
+
+    if not lines_data:
+        flash("Kom pokkhe ekta valid item line dite hobe (item, quantity, price).", "danger")
+        return redirect(url_for("purchase_page"))
+
+    purchase = Purchase(
+        supplier_id=supplier.id,
+        po_number=po_number or None,
+        po_batch=po_batch or None,
+        purchase_date=purchase_date_obj,
+        status=status,
+        note=note or None,
+        total_amount=0,
+    )
+    db.session.add(purchase)
+    db.session.flush()
+
+    total_amount = 0.0
+    for item_id, qty_int, price_float in lines_data:
+        item = Item.query.get(item_id)
+        if not item:
+            continue
+        item.quantity += qty_int
+        subtotal = qty_int * price_float
+        total_amount += subtotal
+
+        stock_log = StockLog(
+            item_id=item.id,
+            change_type="in",
+            movement_type="purchase",
+            quantity=qty_int,
+            reason=f"Purchase - {supplier.name}",
+            supplier=supplier.name,
+            po_number=po_number or None,
+            po_batch=po_batch or None,
+            entry_date=purchase_date_obj,
+        )
+        db.session.add(stock_log)
+        db.session.flush()
+
+        db.session.add(PurchaseLine(
+            purchase_id=purchase.id,
+            item_id=item.id,
+            quantity=qty_int,
+            unit_price=price_float,
+            stock_log_id=stock_log.id,
+        ))
+
+    purchase.total_amount = round(total_amount, 2)
+
+    if status == "paid":
+        _create_expense_for_purchase(purchase)
+
+    db.session.commit()
+    flash("Purchase record kora hoyeche.", "success")
+    return redirect(url_for("purchase_page"))
+
+
+@app.route("/purchases/<int:purchase_id>/update", methods=["POST"])
+@login_required
+def update_purchase(purchase_id):
+    purchase = Purchase.query.get_or_404(purchase_id)
+
+    supplier_id = request.form.get("supplier_id")
+    if supplier_id:
+        purchase.supplier_id = int(supplier_id)
+    purchase.po_number = request.form.get("po_number", "").strip() or None
+    purchase.po_batch = request.form.get("po_batch", "").strip() or None
+    purchase.note = request.form.get("note", "").strip() or None
+    purchase_date = request.form.get("purchase_date")
+    if purchase_date:
+        purchase.purchase_date = date.fromisoformat(purchase_date)
+
+    new_status = request.form.get("status", purchase.status)
+    if new_status == "paid" and purchase.status == "due":
+        _create_expense_for_purchase(purchase)
+        purchase.status = "paid"
+    elif new_status == "due" and purchase.status == "paid":
+        if purchase.expense_id:
+            expense = Expense.query.get(purchase.expense_id)
+            if expense:
+                db.session.delete(expense)
+            purchase.expense_id = None
+        purchase.status = "due"
+    elif purchase.status == "paid" and purchase.expense_id:
+        expense = Expense.query.get(purchase.expense_id)
+        if expense:
+            expense.amount = purchase.total_amount
+            expense.entry_date = purchase.purchase_date
+            expense.purpose = f"Purchase - {purchase.supplier.name if purchase.supplier else 'Supplier'}"
+
+    db.session.commit()
+    flash("Purchase update kora hoyeche.", "success")
+    return redirect(url_for("purchase_page"))
+
+
+@app.route("/purchases/<int:purchase_id>/delete", methods=["POST"])
+@login_required
+def delete_purchase(purchase_id):
+    purchase = Purchase.query.get_or_404(purchase_id)
+
+    for line in purchase.lines:
+        item = Item.query.get(line.item_id)
+        if item:
+            item.quantity -= line.quantity
+        if line.stock_log_id:
+            stock_log = StockLog.query.get(line.stock_log_id)
+            if stock_log:
+                db.session.delete(stock_log)
+
+    if purchase.expense_id:
+        expense = Expense.query.get(purchase.expense_id)
+        if expense:
+            db.session.delete(expense)
+
+    db.session.delete(purchase)
+    db.session.commit()
+    flash("Purchase entry delete kora hoyeche.", "info")
+    return redirect(url_for("purchase_page"))
+
+
+def _daywise_summary(date_from, date_to):
+    income_rows = (
+        db.session.query(Income.entry_date, func.sum(Income.amount))
+        .filter(Income.entry_date >= date_from, Income.entry_date <= date_to)
+        .group_by(Income.entry_date)
+        .all()
+    )
+    expense_rows = (
+        db.session.query(Expense.entry_date, func.sum(Expense.amount))
+        .filter(Expense.entry_date >= date_from, Expense.entry_date <= date_to)
+        .group_by(Expense.entry_date)
+        .all()
+    )
+    income_map = {d: float(amt) for d, amt in income_rows}
+    expense_map = {d: float(amt) for d, amt in expense_rows}
+    all_dates = sorted(set(income_map) | set(expense_map))
+
+    rows = []
+    total_income = 0.0
+    total_expense = 0.0
+    for d in all_dates:
+        inc = income_map.get(d, 0.0)
+        exp = expense_map.get(d, 0.0)
+        total_income += inc
+        total_expense += exp
+        rows.append({"date": d, "income": round(inc, 2), "expense": round(exp, 2), "net": round(inc - exp, 2)})
+
+    return rows, round(total_income, 2), round(total_expense, 2), round(total_income - total_expense, 2)
+
+
+@app.route("/accounts/export")
+@login_required
+def export_accounts_report():
+    today = date.today()
+    date_from = date.fromisoformat(request.args.get("date_from") or today.replace(day=1).isoformat())
+    date_to = date.fromisoformat(request.args.get("date_to") or today.isoformat())
+
+    daywise_rows, total_income, total_expense, total_net = _daywise_summary(date_from, date_to)
+
+    income_entries = Income.query.filter(
+        Income.entry_date >= date_from, Income.entry_date <= date_to
+    ).order_by(Income.entry_date, Income.id).all()
+    expense_entries = Expense.query.filter(
+        Expense.entry_date >= date_from, Expense.entry_date <= date_to
+    ).order_by(Expense.entry_date, Expense.id).all()
+
+    transactions = [
+        {
+            "date": entry.entry_date, "type": "Income", "purpose": entry.purpose,
+            "category": entry.category or "", "note": entry.note or "", "amount": entry.amount,
+        }
+        for entry in income_entries
+    ] + [
+        {
+            "date": entry.entry_date, "type": "Expense", "purpose": entry.purpose,
+            "category": entry.category or "", "note": entry.note or "", "amount": entry.amount,
+        }
+        for entry in expense_entries
+    ]
+    transactions.sort(key=lambda t: t["date"])
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Report"
+
+    BLUE = "2A78D6"
+    RED = "E34948"
+    GRAY = "6C757D"
+    LIGHT_BLUE = "EAF2FD"
+    LIGHT_RED = "FDECEA"
+    GOLD = "FFF3CD"
+    WHITE_FONT = Font(color="FFFFFF", bold=True)
+    TITLE_FONT = Font(color="FFFFFF", bold=True, size=16)
+    BOLD = Font(bold=True)
+    CURRENCY_FMT = '"৳"#,##0.00'
+    THIN = Side(style="thin", color="D9D9D9")
+    BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+
+    def section_header(row, text, span=6, fill=GRAY):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=span)
+        cell = ws.cell(row=row, column=1, value=text)
+        cell.font = WHITE_FONT
+        cell.fill = PatternFill("solid", fgColor=fill)
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[row].height = 22
+
+    def header_row(row, labels):
+        for col, label in enumerate(labels, start=1):
+            cell = ws.cell(row=row, column=col, value=label)
+            cell.font = BOLD
+            cell.fill = PatternFill("solid", fgColor="EEF0F3")
+            cell.border = BORDER
+            cell.alignment = Alignment(horizontal="center" if col > 1 else "left")
+
+    r = 1
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
+    title_cell = ws.cell(row=r, column=1, value="Income & Expense Report")
+    title_cell.font = TITLE_FONT
+    title_cell.fill = PatternFill("solid", fgColor=BLUE)
+    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[r].height = 28
+    r += 1
+
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
+    period_cell = ws.cell(row=r, column=1, value=f"Period: {date_from.isoformat()} to {date_to.isoformat()}")
+    period_cell.font = Font(italic=True, color="6C757D")
+    r += 2
+
+    section_header(r, "Transaction Details", span=6, fill=GRAY)
+    r += 1
+    header_row(r, ["Date", "Type", "Purpose", "Category", "Note", "Amount"])
+    r += 1
+    for t in transactions:
+        fill = LIGHT_BLUE if t["type"] == "Income" else LIGHT_RED
+        values = [t["date"].isoformat(), t["type"], t["purpose"], t["category"], t["note"], t["amount"]]
+        for col, val in enumerate(values, start=1):
+            cell = ws.cell(row=r, column=col, value=val)
+            cell.fill = PatternFill("solid", fgColor=fill)
+            cell.border = BORDER
+            if col == 2:
+                cell.font = Font(color=BLUE if t["type"] == "Income" else RED, bold=True)
+            if col == 6:
+                cell.number_format = CURRENCY_FMT
+                cell.alignment = Alignment(horizontal="right")
+        r += 1
+    if not transactions:
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
+        ws.cell(row=r, column=1, value="Ei date range e kono transaction nei.").alignment = Alignment(horizontal="center")
+        r += 1
+    r += 1
+
+    section_header(r, "Day-wise Totals", span=4, fill=GRAY)
+    r += 1
+    header_row(r, ["Date", "Income", "Expense", "Net"])
+    r += 1
+    ZEBRA = "F2F4F7"
+    for i, row in enumerate(daywise_rows):
+        zebra_fill = PatternFill("solid", fgColor=ZEBRA) if i % 2 == 1 else None
+        values = [row["date"].isoformat(), row["income"], row["expense"], row["net"]]
+        for col, val in enumerate(values, start=1):
+            cell = ws.cell(row=r, column=col, value=val)
+            cell.border = BORDER
+            if zebra_fill:
+                cell.fill = zebra_fill
+            if col >= 2:
+                cell.number_format = CURRENCY_FMT
+                cell.alignment = Alignment(horizontal="right")
+            if col == 4:
+                cell.font = Font(color="0CA30C" if row["net"] >= 0 else RED, bold=True)
+        r += 1
+    if not daywise_rows:
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
+        ws.cell(row=r, column=1, value="Ei date range e kono data nei.").alignment = Alignment(horizontal="center")
+        r += 1
+
+    total_row = ["All Total", total_income, total_expense, total_net]
+    for col, val in enumerate(total_row, start=1):
+        cell = ws.cell(row=r, column=col, value=val)
+        cell.font = BOLD
+        cell.fill = PatternFill("solid", fgColor=GOLD)
+        cell.border = BORDER
+        if col >= 2:
+            cell.number_format = CURRENCY_FMT
+            cell.alignment = Alignment(horizontal="right")
+        if col == 4:
+            cell.font = Font(bold=True, color="0CA30C" if total_net >= 0 else RED)
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 26
+    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["E"].width = 20
+    ws.column_dimensions["F"].width = 14
+    ws.freeze_panes = "A6"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    return Response(
+        buffer.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=income_expense_report.xlsx"},
+    )
+
+
+@app.route("/accounts")
+@login_required
+def accounts_dashboard():
+    total_income = db.session.query(func.coalesce(func.sum(Income.amount), 0)).scalar()
+    total_expense = db.session.query(func.coalesce(func.sum(Expense.amount), 0)).scalar()
+    balance = total_income - total_expense
+
+    today = date.today()
+    prev_year, prev_month = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+    this_month_income = _month_sum(Income, today.year, today.month)
+    last_month_income = _month_sum(Income, prev_year, prev_month)
+    this_month_expense = _month_sum(Expense, today.year, today.month)
+    last_month_expense = _month_sum(Expense, prev_year, prev_month)
+    income_trend = _trend(this_month_income, last_month_income)
+    expense_trend = _trend(this_month_expense, last_month_expense)
+
+    recent_income = Income.query.order_by(Income.entry_date.desc(), Income.id.desc()).limit(8).all()
+    recent_expense = Expense.query.order_by(Expense.entry_date.desc(), Expense.id.desc()).limit(8).all()
+
+    income_by_category = (
+        db.session.query(func.coalesce(Income.category, "Uncategorized"), func.sum(Income.amount))
+        .group_by(func.coalesce(Income.category, "Uncategorized"))
+        .order_by(func.sum(Income.amount).desc())
+        .all()
+    )
+    expense_by_category = (
+        db.session.query(func.coalesce(Expense.category, "Uncategorized"), func.sum(Expense.amount))
+        .group_by(func.coalesce(Expense.category, "Uncategorized"))
+        .order_by(func.sum(Expense.amount).desc())
+        .all()
+    )
+
+    # Combined monthly summary (last 6 months) so income vs expense is clear at a glance.
+    year, month = today.year, today.month
+    months = []
+    for _ in range(6):
+        months.append((year, month))
+        year, month = (year - 1, 12) if month == 1 else (year, month - 1)
+    months.reverse()
+
+    monthly_summary = []
+    max_amount = 0
+    for y, m in months:
+        m_income = _month_sum(Income, y, m)
+        m_expense = _month_sum(Expense, y, m)
+        max_amount = max(max_amount, m_income, m_expense)
+        monthly_summary.append({
+            "label": f"{month_abbr[m]} {y}",
+            "income": round(m_income, 2),
+            "expense": round(m_expense, 2),
+            "net": round(m_income - m_expense, 2),
+        })
+    for row in monthly_summary:
+        row["income_pct"] = round((row["income"] / max_amount) * 100, 1) if max_amount else 0
+        row["expense_pct"] = round((row["expense"] / max_amount) * 100, 1) if max_amount else 0
+
+    report_date_from = request.args.get("date_from") or today.replace(day=1).isoformat()
+    report_date_to = request.args.get("date_to") or today.isoformat()
+    report_date_from_obj = date.fromisoformat(report_date_from)
+    report_date_to_obj = date.fromisoformat(report_date_to)
+    daywise_rows, period_income, period_expense, period_net = _daywise_summary(
+        report_date_from_obj, report_date_to_obj
+    )
+    report_income_entries = Income.query.filter(
+        Income.entry_date >= report_date_from_obj, Income.entry_date <= report_date_to_obj
+    ).order_by(Income.entry_date, Income.id).all()
+    report_expense_entries = Expense.query.filter(
+        Expense.entry_date >= report_date_from_obj, Expense.entry_date <= report_date_to_obj
+    ).order_by(Expense.entry_date, Expense.id).all()
+
+    return render_template(
+        "accounts_dashboard.html",
+        total_income=total_income,
+        total_expense=total_expense,
+        balance=balance,
+        income_trend=income_trend,
+        expense_trend=expense_trend,
+        recent_income=recent_income,
+        recent_expense=recent_expense,
+        income_by_category=income_by_category,
+        expense_by_category=expense_by_category,
+        monthly_summary=monthly_summary,
+        report_date_from=report_date_from,
+        report_date_to=report_date_to,
+        daywise_rows=daywise_rows,
+        period_income=period_income,
+        period_expense=period_expense,
+        period_net=period_net,
+        report_income_entries=report_income_entries,
+        report_expense_entries=report_expense_entries,
+    )
 
 
 # ---------- Income ----------

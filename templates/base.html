@@ -92,6 +92,11 @@
 
     .low-stock-badge { background: var(--color-danger); color: #fff; padding: .2rem .5rem; border-radius: .35rem; font-size: .8rem; font-weight: 600; }
 
+    .mini-bar-track { flex: 1; background: #eef0f3; border-radius: 4px; height: 10px; overflow: hidden; min-width: 80px; }
+    .mini-bar-fill { height: 100%; border-radius: 4px; }
+    .mini-bar-fill.income { background: var(--color-primary); }
+    .mini-bar-fill.expense { background: var(--color-danger); }
+
     /* Let wide tables scroll horizontally instead of squeezing/wrapping columns on small screens */
     .table-responsive table { min-width: 640px; }
     .table-responsive table.table-sm { min-width: 480px; }
@@ -125,7 +130,7 @@
     <a class="nav-link {{ 'active' if request.endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
       <i class="bi bi-speedometer2"></i> Dashboard
     </a>
-    {% set inventory_active = request.endpoint in ('inventory', 'sale_page', 'stock_report_page') %}
+    {% set inventory_active = request.endpoint in ('inventory', 'sale_page', 'purchase_page', 'stock_report_page') %}
     <a class="nav-link submenu-toggle {{ 'active' if inventory_active else '' }}" data-bs-toggle="collapse" href="#inventorySubmenu" role="button" aria-expanded="{{ 'true' if inventory_active else 'false' }}">
       <i class="bi bi-box-seam"></i> Inventory <i class="bi bi-chevron-down chevron ms-auto"></i>
     </a>
@@ -136,15 +141,21 @@
       <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'sale_page' else '' }}" href="{{ url_for('sale_page') }}">
         <i class="bi bi-cart-check"></i> Sale
       </a>
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'purchase_page' else '' }}" href="{{ url_for('purchase_page') }}">
+        <i class="bi bi-bag-plus"></i> Purchase
+      </a>
       <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'stock_report_page' else '' }}" href="{{ url_for('stock_report_page') }}">
         <i class="bi bi-clock-history"></i> Report
       </a>
     </div>
-    {% set accounts_active = request.endpoint in ('income', 'expense') %}
+    {% set accounts_active = request.endpoint in ('accounts_dashboard', 'income', 'expense') %}
     <a class="nav-link submenu-toggle {{ 'active' if accounts_active else '' }}" data-bs-toggle="collapse" href="#accountsSubmenu" role="button" aria-expanded="{{ 'true' if accounts_active else 'false' }}">
       <i class="bi bi-wallet2"></i> Accounts <i class="bi bi-chevron-down chevron ms-auto"></i>
     </a>
     <div class="collapse {{ 'show' if accounts_active else '' }}" id="accountsSubmenu">
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'accounts_dashboard' else '' }}" href="{{ url_for('accounts_dashboard') }}">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
       <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'income' else '' }}" href="{{ url_for('income') }}">
         <i class="bi bi-graph-up-arrow"></i> Income
       </a>

@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}Accounts - Invenex{% endblock %}
+{% block content %}
+<h3 class="mb-4"><i class="bi bi-wallet2 text-primary"></i> Accounts</h3>
+
+<div class="row g-3 mb-4 row-cols-1 row-cols-md-3">
+  <div class="col">
+    <div class="stat-card bg-blue">
+      <div class="stat-top">
+        <div>
+          <div class="label">Total Income</div>
+          <div class="value">৳{{ "%.2f"|format(total_income) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-cash-stack"></i></div>
+      </div>
+      <div class="stat-subtitle">
+        {% if not (income_trend.direction == 'flat' and income_trend.pct is none) %}
+          {% if income_trend.direction == 'up' %}<i class="bi bi-arrow-up-right"></i>
+          {% elif income_trend.direction == 'down' %}<i class="bi bi-arrow-down-right"></i>
+          {% else %}<i class="bi bi-dash-lg"></i>{% endif %}
+          {% if income_trend.pct is not none %}{{ "%+.0f"|format(income_trend.pct) }}%{% else %}New{% endif %} vs last month
+        {% else %}
+          All-time total
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-red">
+      <div class="stat-top">
+        <div>
+          <div class="label">Total Expense</div>
+          <div class="value">৳{{ "%.2f"|format(total_expense) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-wallet2"></i></div>
+      </div>
+      <div class="stat-subtitle">
+        {% if not (expense_trend.direction == 'flat' and expense_trend.pct is none) %}
+          {% if expense_trend.direction == 'up' %}<i class="bi bi-arrow-up-right"></i>
+          {% elif expense_trend.direction == 'down' %}<i class="bi bi-arrow-down-right"></i>
+          {% else %}<i class="bi bi-dash-lg"></i>{% endif %}
+          {% if expense_trend.pct is not none %}{{ "%+.0f"|format(expense_trend.pct) }}%{% else %}New{% endif %} vs last month
+        {% else %}
+          All-time total
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="stat-card bg-green">
+      <div class="stat-top">
+        <div>
+          <div class="label">Current Balance</div>
+          <div class="value">৳{{ "%.2f"|format(balance) }}</div>
+        </div>
+        <div class="icon-badge"><i class="bi bi-piggy-bank"></i></div>
+      </div>
+      <div class="stat-subtitle">Income minus expense</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header-colored gray">
+    <i class="bi bi-bar-chart-steps"></i> Combined Report &mdash; Income vs Expense (last 6 months)
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th style="min-width:220px;">Income</th>
+          <th style="min-width:220px;">Expense</th>
+          <th class="text-end">Net</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in monthly_summary %}
+        <tr>
+          <td class="fw-semibold">{{ row.label }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="mini-bar-track"><div class="mini-bar-fill income" style="width: {{ row.income_pct }}%;"></div></div>
+              <span class="small text-nowrap">৳{{ "%.2f"|format(row.income) }}</span>
+            </div>
+          </td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="mini-bar-track"><div class="mini-bar-fill expense" style="width: {{ row.expense_pct }}%;"></div></div>
+              <span class="small text-nowrap">৳{{ "%.2f"|format(row.expense) }}</span>
+            </div>
+          </td>
+          <td class="text-end fw-semibold {{ 'text-success' if row.net >= 0 else 'text-danger' }}">
+            {{ "+" if row.net >= 0 else "" }}৳{{ "%.2f"|format(row.net) }}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted">Kono data nei.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header-colored blue">
+    <i class="bi bi-table"></i> Day-wise Report
+    <a href="{{ url_for('export_accounts_report', date_from=report_date_from, date_to=report_date_to) }}" class="btn btn-sm btn-light ms-auto"><i class="bi bi-file-earmark-excel"></i> Export Excel</a>
+  </div>
+  <div class="p-3 pb-0">
+    <h5 class="mb-1">Income &amp; Expense Report</h5>
+    <p class="text-muted small mb-3">Period: {{ report_date_from }} to {{ report_date_to }}</p>
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label mb-0 small">From</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ report_date_from }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label mb-0 small">To</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ report_date_to }}">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+        <a href="{{ url_for('accounts_dashboard') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+  <div class="row g-0">
+    <div class="col-md-6 border-end">
+      <h6 class="text-primary px-3 pt-3 mb-0"><i class="bi bi-graph-up-arrow"></i> Income</h6>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Purpose</th>
+              <th>Category</th>
+              <th class="text-end">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in report_income_entries %}
+            <tr>
+              <td>{{ entry.entry_date }}</td>
+              <td>{{ entry.purpose }}</td>
+              <td>{{ entry.category or "" }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted">Ei date range e kono income nei.</td></tr>
+            {% endfor %}
+          </tbody>
+          {% if report_income_entries %}
+          <tfoot>
+            <tr class="table-light fw-bold">
+              <td colspan="3">Total</td>
+              <td class="text-end text-success">৳{{ "%.2f"|format(period_income) }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <h6 class="text-danger px-3 pt-3 mb-0"><i class="bi bi-receipt"></i> Expense</h6>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Purpose</th>
+              <th>Category</th>
+              <th class="text-end">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in report_expense_entries %}
+            <tr>
+              <td>{{ entry.entry_date }}</td>
+              <td>{{ entry.purpose }}</td>
+              <td>{{ entry.category or "" }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted">Ei date range e kono expense nei.</td></tr>
+            {% endfor %}
+          </tbody>
+          {% if report_expense_entries %}
+          <tfoot>
+            <tr class="table-light fw-bold">
+              <td colspan="3">Total</td>
+              <td class="text-end text-danger">৳{{ "%.2f"|format(period_expense) }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+  {% if daywise_rows %}
+  <div class="p-3 border-top d-flex justify-content-end">
+    <span class="fw-bold {{ 'text-success' if period_net >= 0 else 'text-danger' }}">
+      Net Total: {{ "+" if period_net >= 0 else "" }}৳{{ "%.2f"|format(period_net) }}
+    </span>
+  </div>
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header-colored blue">
+        <i class="bi bi-tags"></i> Income by Category
+      </div>
+      <div class="p-3">
+        {% if income_by_category %}
+          <table class="table table-sm mb-0">
+            <tbody>
+              {% for category, total in income_by_category %}
+              <tr>
+                <td>{{ category }}</td>
+                <td class="text-end">৳{{ "%.2f"|format(total) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted mb-0">Kono income entry nei.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header-colored red">
+        <i class="bi bi-tags"></i> Expense by Category
+      </div>
+      <div class="p-3">
+        {% if expense_by_category %}
+          <table class="table table-sm mb-0">
+            <tbody>
+              {% for category, total in expense_by_category %}
+              <tr>
+                <td>{{ category }}</td>
+                <td class="text-end">৳{{ "%.2f"|format(total) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted mb-0">Kono expense entry nei.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header-colored blue">
+        <i class="bi bi-graph-up-arrow"></i> Recent Income
+        <a href="{{ url_for('income') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if recent_income %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Purpose</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+          {% for entry in recent_income %}
+            <tr>
+              <td>{{ entry.entry_date }}</td>
+              <td>{{ entry.purpose }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono income entry nei.</p>
+      {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header-colored red">
+        <i class="bi bi-receipt"></i> Recent Expense
+        <a href="{{ url_for('expense') }}" class="btn btn-sm btn-light ms-auto">Manage</a>
+      </div>
+      <div class="card-body-flush">
+      {% if recent_expense %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Purpose</th><th class="text-end">Amount</th></tr></thead>
+          <tbody>
+          {% for entry in recent_expense %}
+            <tr>
+              <td>{{ entry.entry_date }}</td>
+              <td>{{ entry.purpose }}</td>
+              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0 p-3">Kono expense entry nei.</p>
+      {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

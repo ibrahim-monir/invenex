@@ -48,7 +48,8 @@
         <th>Current Quantity</th>
         <th>Low Stock At</th>
         <th class="text-end">Buying Price</th>
-        <th class="text-end">Selling Price</th>
+        <th class="text-end">Regular Price</th>
+        <th class="text-end">Discount Price</th>
         <th></th>
       </tr>
     </thead>
@@ -70,6 +71,11 @@
         <td class="text-end">{{ "৳%.2f"|format(item.buying_price) if item.buying_price is not none else "" }}</td>
         <td class="text-end">{{ "৳%.2f"|format(item.selling_price) if item.selling_price is not none else "" }}</td>
         <td class="text-end">
+          {% if item.discount_price is not none %}
+            <span class="text-danger fw-semibold">৳{{ "%.2f"|format(item.discount_price) }}</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
           <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#stockModal{{ item.id }}"><i class="bi bi-arrow-left-right"></i> Stock In/Out</button>
           <form method="post" action="{{ url_for('delete_item', item_id=item.id) }}" class="d-inline" onsubmit="return confirm('Item ta delete korte chan?');">
             <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -77,7 +83,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="9" class="text-center text-muted">Kono item pawa jayni.</td></tr>
+      <tr><td colspan="10" class="text-center text-muted">Kono item pawa jayni.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -169,7 +175,8 @@
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">SKU</label>
-            <input type="text" name="sku" class="form-control" placeholder="ex: SKU-001">
+            <input type="text" name="sku" id="newItemSku" class="form-control" placeholder="ex: SKU-001">
+            <div id="skuWarning" class="text-danger small mt-1 d-none"><i class="bi bi-exclamation-triangle"></i> Ei SKU already use hocche!</div>
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">Category</label>
@@ -183,13 +190,17 @@
         <hr>
         <h6 class="text-muted small text-uppercase mb-2">Pricing</h6>
         <div class="row">
-          <div class="col-md-6 mb-3">
+          <div class="col-md-4 mb-3">
             <label class="form-label">Buying Price (per unit)</label>
             <input type="number" step="0.01" name="buying_price" class="form-control" min="0" placeholder="0.00">
           </div>
-          <div class="col-md-6 mb-3">
-            <label class="form-label">Selling Price (per unit)</label>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Regular Sale Price (per unit)</label>
             <input type="number" step="0.01" name="selling_price" class="form-control" min="0" placeholder="0.00">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Discount Sale Price (per unit)</label>
+            <input type="number" step="0.01" name="discount_price" class="form-control" min="0" placeholder="0.00">
           </div>
         </div>
 
@@ -211,7 +222,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="submit" class="btn btn-primary" id="stockInSaveBtn">Save</button>
       </div>
     </form>
   </div>
@@ -264,4 +275,23 @@
   </div>
 </div>
 {% endfor %}
+
+<script>
+  const existingSkus = new Set(
+    {{ all_items | selectattr('sku') | map(attribute='sku') | list | tojson }}.map(s => s.toLowerCase())
+  );
+  const skuInput = document.getElementById('newItemSku');
+  const skuWarning = document.getElementById('skuWarning');
+  const stockInSaveBtn = document.getElementById('stockInSaveBtn');
+
+  if (skuInput) {
+    skuInput.addEventListener('input', () => {
+      const val = skuInput.value.trim().toLowerCase();
+      const isDuplicate = val !== '' && existingSkus.has(val);
+      skuWarning.classList.toggle('d-none', !isDuplicate);
+      skuInput.classList.toggle('is-invalid', isDuplicate);
+      if (stockInSaveBtn) stockInSaveBtn.disabled = isDuplicate;
+    });
+  }
+</script>
 {% endblock %}

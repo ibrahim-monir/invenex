@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Purchase - Invenex{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+  <h3 class="mb-0"><i class="bi bi-bag-plus text-primary"></i> Purchase <span class="badge bg-purple fs-6 fw-normal">৳{{ "%.2f"|format(due_total) }} due</span></h3>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal"><i class="bi bi-person-plus"></i> Add Supplier</button>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordPurchaseModal"><i class="bi bi-bag-plus"></i> Record Purchase</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header-colored blue">
+    <i class="bi bi-clock-history"></i> Purchase History
+  </div>
+  <div class="table-responsive">
+  <table class="table align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Supplier</th>
+        <th>PO Ref</th>
+        <th>Items</th>
+        <th class="text-end">Total</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in purchases %}
+      <tr>
+        <td>{{ p.purchase_date }}</td>
+        <td>{{ p.supplier.name if p.supplier else "Deleted supplier" }}</td>
+        <td>
+          {% if p.po_number %}{{ p.po_number }}{% endif %}
+          {% if p.po_batch %} / {{ p.po_batch }}{% endif %}
+        </td>
+        <td>{{ p.lines | map(attribute='item.name') | select('string') | join(', ') }}</td>
+        <td class="text-end">৳{{ "%.2f"|format(p.total_amount) }}</td>
+        <td>
+          {% if p.status == "paid" %}
+            <span class="badge bg-success">Paid</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">Due</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editPurchaseModal{{ p.id }}"><i class="bi bi-pencil"></i> Edit</button>
+          <form method="post" action="{{ url_for('delete_purchase', purchase_id=p.id) }}" class="d-inline" onsubmit="return confirm('Purchase ta delete korle stock ar expense o revert hoye jabe. Continue korben?');">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted">Kono purchase record kora hoyni.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Add Supplier Modal -->
+<div class="modal fade" id="addSupplierModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('add_supplier') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Supplier</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Supplier Name</label>
+          <input type="text" name="name" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Contact (optional)</label>
+          <input type="text" name="contact" class="form-control" placeholder="Phone/email">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Notes (optional)</label>
+          <input type="text" name="notes" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Save Supplier</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Record Purchase Modal -->
+<div class="modal fade" id="recordPurchaseModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <form method="post" action="{{ url_for('add_purchase') }}" class="modal-content" id="recordPurchaseForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Record Purchase</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% if not suppliers %}
+        <div class="alert alert-warning">Age ekta Supplier add korun ("Add Supplier" button), tarpor purchase record korte parben.</div>
+        {% endif %}
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Supplier</label>
+            <select name="supplier_id" class="form-select" required>
+              <option value="" disabled selected>Select supplier</option>
+              {% for s in suppliers %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Purchase Order No</label>
+            <input type="text" name="po_number" class="form-control" placeholder="ex: PO-1024">
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Purchase Order Batch</label>
+            <input type="text" name="po_batch" class="form-control" placeholder="ex: Batch-A">
+          </div>
+          <div class="col-md-2 mb-3">
+            <label class="form-label">Date</label>
+            <input type="date" name="purchase_date" class="form-control" value="{{ today }}">
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="text-muted small text-uppercase mb-2">Items</h6>
+        <div class="table-responsive">
+        <table class="table table-sm align-middle" id="purchaseLinesTable">
+          <thead>
+            <tr>
+              <th style="min-width:220px;">Item</th>
+              <th style="width:110px;">Quantity</th>
+              <th style="width:140px;">Unit Price</th>
+              <th style="width:120px;" class="text-end">Subtotal</th>
+              <th style="width:40px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="purchase-line-row">
+              <td>
+                <select name="item_id[]" class="form-select form-select-sm" required>
+                  <option value="" disabled selected>Select item</option>
+                  {% for item in all_items %}
+                  <option value="{{ item.id }}">{{ item.name }} ({{ item.unit }})</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input type="number" name="quantity[]" class="form-control form-control-sm line-qty" min="1" required></td>
+              <td><input type="number" name="unit_price[]" step="0.01" class="form-control form-control-sm line-price" min="0" required></td>
+              <td class="text-end line-subtotal">৳0.00</td>
+              <td><button type="button" class="btn btn-sm btn-outline-danger remove-line"><i class="bi bi-x-lg"></i></button></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="addLineBtn"><i class="bi bi-plus-lg"></i> Add Line</button>
+
+        <div class="text-end mt-3">
+          <span class="fs-5 fw-bold">Grand Total: <span id="grandTotal">৳0.00</span></span>
+        </div>
+
+        <hr>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Payment Status</label>
+            <select name="status" class="form-select">
+              <option value="due">Due (poroborti te pay korte hobe)</option>
+              <option value="paid">Paid (expense e jog hobe)</option>
+            </select>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Note (optional)</label>
+            <input type="text" name="note" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary" {{ 'disabled' if not suppliers else '' }}>Save Purchase</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Purchase Modals -->
+{% for p in purchases %}
+<div class="modal fade" id="editPurchaseModal{{ p.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('update_purchase', purchase_id=p.id) }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit Purchase - {{ p.supplier.name if p.supplier else "Deleted supplier" }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Item/quantity change korte hole ei purchase ta delete kore notun kore record korun.</p>
+        <div class="mb-3">
+          <label class="form-label">Supplier</label>
+          <select name="supplier_id" class="form-select">
+            {% for s in suppliers %}
+            <option value="{{ s.id }}" {{ 'selected' if p.supplier_id == s.id else '' }}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">PO No</label>
+            <input type="text" name="po_number" class="form-control" value="{{ p.po_number or '' }}">
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">PO Batch</label>
+            <input type="text" name="po_batch" class="form-control" value="{{ p.po_batch or '' }}">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Date</label>
+          <input type="date" name="purchase_date" class="form-control" value="{{ p.purchase_date }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Note</label>
+          <input type="text" name="note" class="form-control" value="{{ p.note or '' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Payment Status</label>
+          <select name="status" class="form-select">
+            <option value="due" {{ 'selected' if p.status == 'due' else '' }}>Due</option>
+            <option value="paid" {{ 'selected' if p.status == 'paid' else '' }}>Paid</option>
+          </select>
+          <div class="form-text">Due &rarr; Paid korle expense record add hobe. Paid &rarr; Due korle linked expense muche jabe.</div>
+        </div>
+        <p class="mb-0"><strong>Total:</strong> ৳{{ "%.2f"|format(p.total_amount) }}</p>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Update Purchase</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+  const purchaseLinesTable = document.getElementById('purchaseLinesTable');
+  const addLineBtn = document.getElementById('addLineBtn');
+  const grandTotalEl = document.getElementById('grandTotal');
+
+  function recalcRow(row) {
+    const qty = parseFloat(row.querySelector('.line-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.line-price').value) || 0;
+    const subtotal = qty * price;
+    row.querySelector('.line-subtotal').textContent = '৳' + subtotal.toFixed(2);
+    return subtotal;
+  }
+
+  function recalcAll() {
+    let total = 0;
+    purchaseLinesTable.querySelectorAll('.purchase-line-row').forEach(row => {
+      total += recalcRow(row);
+    });
+    grandTotalEl.textContent = '৳' + total.toFixed(2);
+  }
+
+  function wireRow(row) {
+    row.querySelectorAll('.line-qty, .line-price').forEach(input => {
+      input.addEventListener('input', recalcAll);
+    });
+    const removeBtn = row.querySelector('.remove-line');
+    removeBtn.addEventListener('click', () => {
+      const rows = purchaseLinesTable.querySelectorAll('.purchase-line-row');
+      if (rows.length > 1) {
+        row.remove();
+        recalcAll();
+      }
+    });
+  }
+
+  purchaseLinesTable.querySelectorAll('.purchase-line-row').forEach(wireRow);
+
+  if (addLineBtn) {
+    addLineBtn.addEventListener('click', () => {
+      const firstRow = purchaseLinesTable.querySelector('.purchase-line-row');
+      const newRow = firstRow.cloneNode(true);
+      newRow.querySelectorAll('select, input').forEach(el => { el.value = ''; });
+      newRow.querySelector('.line-subtotal').textContent = '৳0.00';
+      purchaseLinesTable.querySelector('tbody').appendChild(newRow);
+      wireRow(newRow);
+    });
+  }
+</script>
+{% endblock %}

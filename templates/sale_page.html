@@ -41,9 +41,7 @@
           {% endif %}
         </td>
         <td class="text-end">
-          {% if sale.status == "due" %}
-            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editSaleModal{{ sale.id }}"><i class="bi bi-pencil"></i> Edit</button>
-          {% endif %}
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editSaleModal{{ sale.id }}"><i class="bi bi-pencil"></i> Edit</button>
           <form method="post" action="{{ url_for('delete_sale', sale_id=sale.id) }}" class="d-inline" onsubmit="return confirm('Sale entry ta delete korle stock ar income o revert hoye jabe. Continue korben?');">
             <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </form>
@@ -112,9 +110,8 @@
   </div>
 </div>
 
-<!-- Edit Sale Modals (due sales only) -->
+<!-- Edit Sale Modals -->
 {% for sale in sales %}
-{% if sale.status == "due" %}
 <div class="modal fade" id="editSaleModal{{ sale.id }}" tabindex="-1">
   <div class="modal-dialog">
     <form method="post" action="{{ url_for('update_sale', sale_id=sale.id) }}" class="modal-content">
@@ -127,9 +124,15 @@
           <label class="form-label">Customer Name</label>
           <input type="text" name="customer_name" class="form-control" value="{{ sale.customer_name or '' }}">
         </div>
-        <div class="mb-3">
-          <label class="form-label">Total Amount</label>
-          <input type="number" step="0.01" name="amount" class="form-control" min="0.01" value="{{ sale.amount }}" required>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">Quantity</label>
+            <input type="number" name="quantity" class="form-control" min="1" value="{{ sale.quantity }}" required>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Total Amount</label>
+            <input type="number" step="0.01" name="amount" class="form-control" min="0.01" value="{{ sale.amount }}" required>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">Date</label>
@@ -142,9 +145,10 @@
         <div class="mb-3">
           <label class="form-label">Payment Status</label>
           <select name="status" class="form-select">
-            <option value="due">Still Due</option>
-            <option value="complete">Mark as Complete (income e jog hobe)</option>
+            <option value="due" {{ 'selected' if sale.status == 'due' else '' }}>Due</option>
+            <option value="complete" {{ 'selected' if sale.status == 'complete' else '' }}>Complete</option>
           </select>
+          <div class="form-text">Due &rarr; Complete korle income record add hobe. Complete &rarr; Due korle linked income record muche jabe.</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -153,6 +157,5 @@
     </form>
   </div>
 </div>
-{% endif %}
 {% endfor %}
 {% endblock %}
