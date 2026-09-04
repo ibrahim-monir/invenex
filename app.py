@@ -375,7 +375,10 @@ def backup_status():
 
     return {
         "backup": "on" if handler.enabled else "off",
+        # Which commit is actually serving this — the host sets it on deploy.
+        "version": os.environ.get("RENDER_GIT_COMMIT", "local")[:7],
         "credentials_loaded": bool(handler.credentials),
+        "worker_started": handler._worker is not None,
         "drive_enabled": handler.drive_enabled,
         "sheets_enabled": handler.sheets_enabled,
         "worker_running": handler._worker is not None and handler._worker.is_alive(),
