@@ -11,3 +11,7 @@ instance/
 cloudflared.exe
 data/
 static/uploads/*
+service-account.json
+*.replaced
+*.download
+render-service-account-oneline.txt

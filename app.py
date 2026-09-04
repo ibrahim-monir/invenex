@@ -20,6 +20,7 @@ from sqlalchemy import func, inspect, text
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+import google_backup
 from models import Expense, Income, Item, Profile, Purchase, PurchaseLine, Sale, StockLog, Supplier, db
 
 ALLOWED_AVATAR_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
@@ -42,6 +43,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 
 database_url = os.environ.get("DATABASE_URL", "").strip()
+SQLITE_DB_PATH = None
 if database_url:
     # Render/Heroku style URLs sometimes start with postgres:// which SQLAlchemy no longer accepts.
     if database_url.startswith("postgres://"):
@@ -49,9 +51,10 @@ if database_url:
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 else:
     os.makedirs(os.path.join(app.root_path, "data"), exist_ok=True)
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(
-        app.root_path, "data", "invenex.db"
-    )
+    SQLITE_DB_PATH = os.path.join(app.root_path, "data", "invenex.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + SQLITE_DB_PATH
+    # Pull the database back from Google Drive before anything opens it.
+    google_backup.init(SQLITE_DB_PATH)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB upload limit
 
@@ -135,9 +138,22 @@ def _add_missing_columns():
     db.session.commit()
 
 
+BACKUP_MODELS = [
+    Item,
+    StockLog,
+    Sale,
+    Supplier,
+    Purchase,
+    PurchaseLine,
+    Income,
+    Expense,
+    Profile,
+]
+
 with app.app_context():
     db.create_all()
     _add_missing_columns()
+    google_backup.start(db.session, BACKUP_MODELS)
 
 
 @app.route("/login", methods=["GET", "POST"])

@@ -27,6 +27,25 @@ Open http://127.0.0.1:5000 and log in with the username/password you set in `.en
 
 Local data is stored in `data/invenex.db` (SQLite) — nothing to configure.
 
+## Backup to Google Drive / Sheets
+
+Your data can be kept in your own Google account — the whole database file in a
+Drive folder (with dated snapshots), and a readable copy of every table in a
+Google Sheet. It uploads automatically a few seconds after each change, and the
+app restores from Drive on startup if the local database is missing.
+
+Setup takes about 10 minutes and needs no credit card — see
+[GOOGLE_BACKUP_SETUP.md](GOOGLE_BACKUP_SETUP.md).
+
+```bash
+python restore_backup.py status       # what is configured
+python restore_backup.py push         # upload to Drive now
+python restore_backup.py pull         # restore from Drive
+python restore_backup.py from-sheets  # rebuild from the Sheet
+```
+
+Leave `GDRIVE_FOLDER_ID` and `GSHEET_ID` empty in `.env` to turn it off.
+
 ## Deploy for free (Render + Neon Postgres)
 
 Render's free web services don't keep a persistent disk, so SQLite data can be lost on
