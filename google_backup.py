@@ -34,6 +34,11 @@ SCOPES = [
 # Sheets caps a single cell at 50,000 characters; stay well under it.
 MAX_CELL_CHARS = 40000
 
+# The app writes a profile row on first render, so a database that has only
+# this is still empty as far as the user's data goes. Counting it would make
+# every fresh boot look like it had data, defeating the overwrite guard.
+AUTO_SEEDED_TABLES = {"profile"}
+
 
 def _env(name, default=""):
     return os.environ.get(name, default).strip()
@@ -127,6 +132,7 @@ class GoogleBackup:
         self._stopping = threading.Event()
         self._last_sheet_sync = 0.0
         self._models = []
+        self._app = None
 
         self.last_error = None
         self.last_upload_at = None
@@ -289,7 +295,11 @@ class GoogleBackup:
         the only surviving copy. If the local side has no rows, check what is
         in Drive before overwriting it.
         """
-        tables = [model.__tablename__ for model in self._models]
+        tables = [
+            model.__tablename__
+            for model in self._models
+            if model.__tablename__ not in AUTO_SEEDED_TABLES
+        ]
         if not tables:
             return True  # nothing registered yet, cannot judge
 
@@ -458,7 +468,12 @@ class GoogleBackup:
                 # Let a burst of writes settle into a single upload.
                 self._stopping.wait(self.debounce)
                 self._dirty.clear()
-                self.flush(session_factory)
+                try:
+                    self.flush(session_factory)
+                except Exception as exc:
+                    # A dead worker means backups stop with no sign of it, so
+                    # record the failure and keep the loop alive.
+                    self.last_error = f"worker: {exc}"
 
         self._worker = threading.Thread(target=run, name="google-backup", daemon=True)
         self._worker.start()
@@ -475,17 +490,20 @@ class GoogleBackup:
                 except Exception as exc:
                     self.last_error = f"upload: {exc}"
 
-            if self.sheets_enabled and session_factory is not None:
+            if self.sheets_enabled and session_factory is not None and self._app:
                 due = (time.monotonic() - self._last_sheet_sync) >= self.sheet_interval
                 if due:
-                    session = session_factory()
-                    try:
-                        self.sync_sheets(session)
-                        self._last_sheet_sync = time.monotonic()
-                    except Exception as exc:
-                        self.last_error = f"sheets: {exc}"
-                    finally:
-                        session.close()
+                    # The worker is its own thread, so it needs an application
+                    # context of its own before the scoped session will resolve.
+                    with self._app.app_context():
+                        session = session_factory()
+                        try:
+                            self.sync_sheets(session)
+                            self._last_sheet_sync = time.monotonic()
+                        except Exception as exc:
+                            self.last_error = f"sheets: {exc}"
+                        finally:
+                            session.close()
 
     def shutdown(self, session_factory=None):
         """Final upload on exit so the last few writes are never lost."""
@@ -548,13 +566,14 @@ def init(db_path):
     return backup
 
 
-def start(db_session, models):
+def start(app, db_session, models):
     """Hook into commits and start the uploader. Runs after db.create_all()."""
     if backup is None or not backup.enabled:
         return
 
     from sqlalchemy import event
 
+    backup._app = app
     backup.register_models(models)
 
     @event.listens_for(db_session, "after_commit")

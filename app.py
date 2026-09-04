@@ -153,7 +153,7 @@ BACKUP_MODELS = [
 with app.app_context():
     db.create_all()
     _add_missing_columns()
-    google_backup.start(db.session, BACKUP_MODELS)
+    google_backup.start(app, db.session, BACKUP_MODELS)
 
 
 @app.route("/login", methods=["GET", "POST"])
