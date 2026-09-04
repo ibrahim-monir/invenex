@@ -85,6 +85,27 @@ def _consistent_copy(db_path, target_path):
         source.close()
 
 
+def _row_count(db_path, table_names):
+    """Total rows across the app's tables. Used to spot an empty database."""
+    total = 0
+    connection = sqlite3.connect(db_path)
+    try:
+        present = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        for table in table_names:
+            if table in present:
+                total += connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    except sqlite3.DatabaseError:
+        return None  # not a readable database
+    finally:
+        connection.close()
+    return total
+
+
 class GoogleBackup:
     def __init__(self, db_path):
         self.db_path = db_path
@@ -217,7 +238,7 @@ class GoogleBackup:
 
     # ---- drive: upload --------------------------------------------------
 
-    def _upload(self):
+    def _upload(self, allow_empty=False):
         """Overwrite the Drive copy with the current database.
 
         A service account has no storage of its own, so it can only *update* a
@@ -239,6 +260,16 @@ class GoogleBackup:
         os.close(handle)
         try:
             _consistent_copy(self.db_path, temp_path)
+
+            if not allow_empty and not self._safe_to_overwrite(temp_path, file_id):
+                self.last_error = (
+                    "refused to upload: this database is empty but the Drive "
+                    "copy has data. Restore first, or use `restore_backup.py "
+                    "push` if wiping the backup is really what you want."
+                )
+                print(f"[backup] {self.last_error}")
+                return
+
             media = MediaFileUpload(temp_path, mimetype=DB_MIMETYPE, resumable=False)
             self.drive.files().update(fileId=file_id, media_body=media).execute()
             self.last_upload_at = datetime.now()
@@ -246,6 +277,45 @@ class GoogleBackup:
         finally:
             try:
                 os.remove(temp_path)
+            except OSError:
+                pass
+
+    def _safe_to_overwrite(self, local_copy, file_id):
+        """Never let a blank database wipe out a good backup.
+
+        This is the accident worth guarding: the app boots somewhere with no
+        data — a fresh host, credentials added after the first run — creates an
+        empty database, and the uploader faithfully copies that emptiness over
+        the only surviving copy. If the local side has no rows, check what is
+        in Drive before overwriting it.
+        """
+        tables = [model.__tablename__ for model in self._models]
+        if not tables:
+            return True  # nothing registered yet, cannot judge
+
+        local_rows = _row_count(local_copy, tables)
+        if local_rows is None or local_rows > 0:
+            return True
+
+        from googleapiclient.http import MediaIoBaseDownload
+
+        handle, remote_copy = tempfile.mkstemp(suffix=".remote.db")
+        os.close(handle)
+        try:
+            request = self.drive.files().get_media(fileId=file_id)
+            with open(remote_copy, "wb") as sink:
+                downloader = MediaIoBaseDownload(sink, request)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk()
+            remote_rows = _row_count(remote_copy, tables)
+            # None = the remote is not a database yet (the placeholder file).
+            return not remote_rows
+        except Exception:
+            return False  # cannot verify, so do not risk it
+        finally:
+            try:
+                os.remove(remote_copy)
             except OSError:
                 pass
 

@@ -56,7 +56,7 @@ def cmd_status():
 
 def cmd_push():
     handler = _backup()
-    handler._upload()
+    handler._upload(allow_empty=True)
     print(f"Uploaded {handler.db_path} to Google Drive.")
 
 
