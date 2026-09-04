@@ -346,6 +346,47 @@ def _filtered_stock_logs():
     return query.order_by(StockLog.entry_date.desc(), StockLog.id.desc()).all()
 
 
+@app.route("/backup-status")
+@login_required
+def backup_status():
+    """Plain-language check of whether the Google backup is actually working."""
+    handler = google_backup.backup
+    if handler is None:
+        return {
+            "backup": "off",
+            "why": "No SQLite database in use (DATABASE_URL is set), so the "
+                   "Drive/Sheets backup never starts.",
+        }
+
+    counts = {}
+    for model in BACKUP_MODELS:
+        counts[model.__tablename__] = db.session.query(model).count()
+
+    problems = []
+    if not handler.credentials:
+        problems.append(
+            "No credentials loaded. Set GOOGLE_SERVICE_ACCOUNT_JSON (the whole "
+            "one-line key) or GOOGLE_SERVICE_ACCOUNT_FILE."
+        )
+    if not handler.folder_id:
+        problems.append("GDRIVE_FOLDER_ID is empty, so nothing uploads to Drive.")
+    if not handler.sheet_id:
+        problems.append("GSHEET_ID is empty, so the spreadsheet is never written.")
+
+    return {
+        "backup": "on" if handler.enabled else "off",
+        "credentials_loaded": bool(handler.credentials),
+        "drive_enabled": handler.drive_enabled,
+        "sheets_enabled": handler.sheets_enabled,
+        "worker_running": handler._worker is not None and handler._worker.is_alive(),
+        "last_upload_at": handler.last_upload_at.isoformat() if handler.last_upload_at else None,
+        "last_error": handler.last_error,
+        "database_path": handler.db_path,
+        "rows": counts,
+        "problems": problems,
+    }
+
+
 @app.route("/inventory")
 @login_required
 def inventory():
