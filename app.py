@@ -1346,6 +1346,30 @@ def add_income():
     return redirect(url_for("income"))
 
 
+@app.route("/income/<int:entry_id>/edit", methods=["POST"])
+@login_required
+def edit_income(entry_id):
+    entry = Income.query.get_or_404(entry_id)
+    purpose = request.form.get("purpose", "").strip()
+    category = request.form.get("category", "").strip()
+    amount = request.form.get("amount", "0")
+    entry_date = request.form.get("entry_date") or date.today().isoformat()
+    note = request.form.get("note", "").strip()
+
+    if not purpose or not amount:
+        flash("Purpose ar amount dite hobe.", "danger")
+        return redirect(url_for("income"))
+
+    entry.purpose = purpose
+    entry.category = category or None
+    entry.amount = float(amount)
+    entry.entry_date = date.fromisoformat(entry_date)
+    entry.note = note
+    db.session.commit()
+    flash("Income entry update kora hoyeche.", "success")
+    return redirect(url_for("income"))
+
+
 @app.route("/income/<int:entry_id>/delete", methods=["POST"])
 @login_required
 def delete_income(entry_id):
@@ -1412,6 +1436,30 @@ def add_expense():
     db.session.add(entry)
     db.session.commit()
     flash("Expense entry add kora hoyeche.", "success")
+    return redirect(url_for("expense"))
+
+
+@app.route("/expense/<int:entry_id>/edit", methods=["POST"])
+@login_required
+def edit_expense(entry_id):
+    entry = Expense.query.get_or_404(entry_id)
+    purpose = request.form.get("purpose", "").strip()
+    category = request.form.get("category", "").strip()
+    amount = request.form.get("amount", "0")
+    entry_date = request.form.get("entry_date") or date.today().isoformat()
+    note = request.form.get("note", "").strip()
+
+    if not purpose or not amount:
+        flash("Purpose ar amount dite hobe.", "danger")
+        return redirect(url_for("expense"))
+
+    entry.purpose = purpose
+    entry.category = category or None
+    entry.amount = float(amount)
+    entry.entry_date = date.fromisoformat(entry_date)
+    entry.note = note
+    db.session.commit()
+    flash("Expense entry update kora hoyeche.", "success")
     return redirect(url_for("expense"))
 
 
