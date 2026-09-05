@@ -130,13 +130,16 @@
     <a class="nav-link {{ 'active' if request.endpoint == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
       <i class="bi bi-speedometer2"></i> Dashboard
     </a>
-    {% set inventory_active = request.endpoint in ('inventory', 'sale_page', 'purchase_page', 'stock_report_page') %}
+    {% set inventory_active = request.endpoint in ('inventory', 'add_item_page', 'sale_page', 'purchase_page', 'stock_report_page') %}
     <a class="nav-link submenu-toggle {{ 'active' if inventory_active else '' }}" data-bs-toggle="collapse" href="#inventorySubmenu" role="button" aria-expanded="{{ 'true' if inventory_active else 'false' }}">
       <i class="bi bi-box-seam"></i> Inventory <i class="bi bi-chevron-down chevron ms-auto"></i>
     </a>
     <div class="collapse {{ 'show' if inventory_active else '' }}" id="inventorySubmenu">
       <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'inventory' else '' }}" href="{{ url_for('inventory') }}">
         <i class="bi bi-box-seam"></i> Items
+      </a>
+      <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'add_item_page' else '' }}" href="{{ url_for('add_item_page') }}">
+        <i class="bi bi-plus-square"></i> Add Item
       </a>
       <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'sale_page' else '' }}" href="{{ url_for('sale_page') }}">
         <i class="bi bi-cart-check"></i> Sale

@@ -5,9 +5,9 @@
   <h3 class="mb-0"><i class="bi bi-box-seam text-warning"></i> Inventory</h3>
   <div class="d-flex flex-wrap gap-2">
     <a href="{{ url_for('export_inventory', **filters) }}" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Export CSV</a>
-    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addCategoryModal"><i class="bi bi-tags"></i> Add Category</button>
     <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#quickStockOutModal"><i class="bi bi-box-arrow-up"></i> Stock Out</button>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-box-arrow-in-down"></i> Stock In</button>
+    <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#quickStockInModal"><i class="bi bi-box-arrow-in-down"></i> Stock In</button>
+    <a href="{{ url_for('add_item_page') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Item</a>
   </div>
 </div>
 
@@ -142,43 +142,41 @@
   </div>
 </div>
 
-<!-- Add Category Modal -->
-<div class="modal fade" id="addCategoryModal" tabindex="-1">
+<!-- Quick Stock In Modal (restock an existing item only) -->
+<div class="modal fade" id="quickStockInModal" tabindex="-1">
   <div class="modal-dialog">
-    <form method="post" action="{{ url_for('add_category') }}" class="modal-content">
+    <form method="post" action="{{ url_for('quick_stock_in') }}" class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Add Category</h5>
+        <h5 class="modal-title"><i class="bi bi-box-arrow-in-down"></i> Stock In</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">Category Name</label>
-          <input type="text" name="name" class="form-control" placeholder="ex: Electronics" required>
-        </div>
-        {% if categories %}
-        <div class="small text-muted">Existing: {{ categories | map(attribute='name') | join(', ') }}</div>
+        <p class="text-muted small">Existing item-e restock. Notun product add korte "Add Item" button use korun.</p>
+        {% if not all_items %}
+        <div class="alert alert-warning">Kono item nei &mdash; age "Add Item" diye ekta product banan.</div>
         {% endif %}
-      </div>
-      <div class="modal-footer">
-        <button type="submit" class="btn btn-primary">Save Category</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Stock In Modal -->
-<div class="modal fade" id="addItemModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <form method="post" action="{{ url_for('add_item') }}" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-box-arrow-in-down"></i> Stock In - New Product</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <h6 class="text-muted small text-uppercase mb-2">Purchase Info</h6>
+        <div class="mb-3">
+          <label class="form-label">Item</label>
+          <select name="item_id" class="form-select" required>
+            <option value="" disabled selected>Select item</option>
+            {% for item in all_items %}
+            <option value="{{ item.id }}">{{ item.name }} ({{ item.quantity }} {{ item.unit }} available)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">Quantity</label>
+            <input type="number" name="quantity" class="form-control" min="1" required>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Date</label>
+            <input type="date" name="entry_date" class="form-control" value="{{ today }}">
+          </div>
+        </div>
         <div class="row">
           <div class="col-md-4 mb-3">
-            <label class="form-label">Supplier</label>
+            <label class="form-label">Supplier (optional)</label>
             <input type="text" name="supplier" class="form-control" placeholder="ex: ABC Trading">
           </div>
           <div class="col-md-4 mb-3">
@@ -190,73 +188,9 @@
             <input type="text" name="po_batch" class="form-control" placeholder="ex: Batch-A">
           </div>
         </div>
-
-        <hr>
-        <h6 class="text-muted small text-uppercase mb-2">Product Info</h6>
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label">Product Name</label>
-            <input type="text" name="name" id="newItemName" class="form-control" list="existingItemNameList" placeholder="Existing item hole naam select korun - stock ota-i add hobe" required>
-            <datalist id="existingItemNameList">
-              {% for item in all_items %}<option value="{{ item.name }}">{% endfor %}
-            </datalist>
-            <div id="existingItemHint" class="text-primary small mt-1 d-none"><i class="bi bi-info-circle"></i> Ei naam-er item age theke ache &mdash; SKU/price change hobe na, shudhu stock quantity add hobe.</div>
-          </div>
-          <div class="col-md-3 mb-3">
-            <label class="form-label">SKU</label>
-            <input type="text" class="form-control" value="Auto (category-based)" disabled>
-            <div class="form-text">Category onujayi serial diye auto set hobe, edit kora jabe na.</div>
-          </div>
-          <div class="col-md-3 mb-3">
-            <label class="form-label">Category</label>
-            <select name="category" class="form-select">
-              <option value="">No category</option>
-              {% for cat in categories %}
-              <option value="{{ cat.name }}">{{ cat.name }}</option>
-              {% endfor %}
-            </select>
-            {% if not categories %}
-            <div class="form-text">Kono category nei &mdash; "Add Category" button diye ekta banan.</div>
-            {% endif %}
-          </div>
-        </div>
-
-        <hr>
-        <h6 class="text-muted small text-uppercase mb-2">Pricing</h6>
-        <div class="row">
-          <div class="col-md-4 mb-3">
-            <label class="form-label">Buying Price (per unit)</label>
-            <input type="number" step="0.01" name="buying_price" class="form-control" min="0" placeholder="0.00">
-          </div>
-          <div class="col-md-4 mb-3">
-            <label class="form-label">Regular Sale Price (per unit)</label>
-            <input type="number" step="0.01" name="selling_price" class="form-control" min="0" placeholder="0.00">
-          </div>
-          <div class="col-md-4 mb-3">
-            <label class="form-label">Discount Sale Price (per unit)</label>
-            <input type="number" step="0.01" name="discount_price" class="form-control" min="0" placeholder="0.00">
-          </div>
-        </div>
-
-        <hr>
-        <h6 class="text-muted small text-uppercase mb-2">Stock</h6>
-        <div class="row">
-          <div class="col-md-4 mb-3">
-            <label class="form-label">Unit Quantity</label>
-            <input type="number" name="quantity" class="form-control" value="0" min="0" required>
-          </div>
-          <div class="col-md-4 mb-3">
-            <label class="form-label">Unit</label>
-            <input type="text" name="unit" class="form-control" value="pcs">
-          </div>
-          <div class="col-md-4 mb-3">
-            <label class="form-label">Low Stock Alert At</label>
-            <input type="number" name="low_stock_threshold" class="form-control" value="5" min="0">
-          </div>
-        </div>
       </div>
       <div class="modal-footer">
-        <button type="submit" class="btn btn-primary" id="stockInSaveBtn">Save</button>
+        <button type="submit" class="btn btn-primary">Confirm Stock In</button>
       </div>
     </form>
   </div>
@@ -309,22 +243,4 @@
   </div>
 </div>
 {% endfor %}
-
-<script>
-  const stockInSaveBtn = document.getElementById('stockInSaveBtn');
-
-  const existingItemNames = new Set(
-    {{ all_items | map(attribute='name') | list | tojson }}.map(n => n.toLowerCase())
-  );
-  const nameInput = document.getElementById('newItemName');
-  const existingItemHint = document.getElementById('existingItemHint');
-
-  if (nameInput) {
-    nameInput.addEventListener('input', () => {
-      const isExisting = existingItemNames.has(nameInput.value.trim().toLowerCase());
-      existingItemHint.classList.toggle('d-none', !isExisting);
-      if (stockInSaveBtn) stockInSaveBtn.textContent = isExisting ? 'Add Stock' : 'Save';
-    });
-  }
-</script>
 {% endblock %}

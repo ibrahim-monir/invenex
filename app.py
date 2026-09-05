@@ -464,6 +464,19 @@ def inventory():
     )
 
 
+@app.route("/inventory/add-item")
+@login_required
+def add_item_page():
+    all_items = Item.query.order_by(Item.name).all()
+    categories = Category.query.order_by(Category.name).all()
+    return render_template(
+        "add_item.html",
+        all_items=all_items,
+        categories=categories,
+        today=date.today().isoformat(),
+    )
+
+
 @app.route("/inventory/sales")
 @login_required
 def sale_page():
@@ -630,19 +643,22 @@ def add_item():
 @login_required
 def add_category():
     name = request.form.get("name", "").strip()
+    next_url = request.form.get("next", "")
+    if not next_url.startswith("/") or next_url.startswith("//"):
+        next_url = url_for("inventory")
 
     if not name:
         flash("Category naam dite hobe.", "danger")
-        return redirect(url_for("inventory"))
+        return redirect(next_url)
 
     if Category.query.filter(func.lower(Category.name) == name.lower()).first():
         flash(f"Category '{name}' already ache.", "danger")
-        return redirect(url_for("inventory"))
+        return redirect(next_url)
 
     db.session.add(Category(name=name))
     db.session.commit()
     flash(f"Category '{name}' add kora hoyeche.", "success")
-    return redirect(url_for("inventory"))
+    return redirect(next_url)
 
 
 @app.route("/inventory/<int:item_id>/stock", methods=["POST"])
@@ -677,6 +693,37 @@ def update_stock(item_id):
     db.session.add(log)
     db.session.commit()
     flash(f"'{item.name}' er stock update hoyeche.", "success")
+    return redirect(url_for("inventory"))
+
+
+@app.route("/inventory/stock-in", methods=["POST"])
+@login_required
+def quick_stock_in():
+    item = Item.query.get_or_404(int(request.form.get("item_id")))
+    quantity = int(request.form.get("quantity", "0") or 0)
+    entry_date = request.form.get("entry_date") or date.today().isoformat()
+    supplier = request.form.get("supplier", "").strip()
+    po_number = request.form.get("po_number", "").strip()
+    po_batch = request.form.get("po_batch", "").strip()
+
+    if quantity <= 0:
+        flash("Quantity 0 er cheye beshi hote hobe.", "danger")
+        return redirect(url_for("inventory"))
+
+    item.quantity += quantity
+    db.session.add(StockLog(
+        item_id=item.id,
+        change_type="in",
+        movement_type="restock",
+        quantity=quantity,
+        reason="Restock",
+        supplier=supplier or None,
+        po_number=po_number or None,
+        po_batch=po_batch or None,
+        entry_date=date.fromisoformat(entry_date),
+    ))
+    db.session.commit()
+    flash(f"'{item.name}' er stock in kora hoyeche.", "success")
     return redirect(url_for("inventory"))
 
 
