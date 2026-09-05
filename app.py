@@ -449,17 +449,27 @@ def backup_sync_now():
     }
 
 
+def _categories_json():
+    return [
+        {"id": c.id, "name": c.name, "parent_id": c.parent_id}
+        for c in Category.query.order_by(Category.name).all()
+    ]
+
+
 @app.route("/inventory")
 @login_required
 def inventory():
     items = _filtered_items()
     all_items = Item.query.order_by(Item.name).all()
     categories = Category.query.order_by(Category.name).all()
+    top_categories = Category.query.filter_by(parent_id=None).order_by(Category.name).all()
     return render_template(
         "inventory.html",
         items=items,
         all_items=all_items,
         categories=categories,
+        top_categories=top_categories,
+        categories_json=_categories_json(),
         today=date.today().isoformat(),
         filters=request.args,
     )
@@ -471,7 +481,7 @@ def add_item_page():
     all_items = Item.query.order_by(Item.name).all()
     top_categories = Category.query.filter_by(parent_id=None).order_by(Category.name).all()
     all_categories = Category.query.order_by(Category.name).all()
-    categories_json = [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in all_categories]
+    categories_json = _categories_json()
     return render_template(
         "add_item.html",
         all_items=all_items,
@@ -774,6 +784,41 @@ def quick_stock_out():
     ))
     db.session.commit()
     flash(f"'{item.name}' theke stock out kora hoyeche.", "success")
+    return redirect(url_for("inventory"))
+
+
+@app.route("/inventory/<int:item_id>/edit", methods=["POST"])
+@login_required
+def edit_item(item_id):
+    item = Item.query.get_or_404(item_id)
+    name = request.form.get("name", "").strip()
+    category = request.form.get("category", "").strip()
+    sub_category = request.form.get("sub_category", "").strip()
+    effective_category = sub_category or category
+    unit = request.form.get("unit", "pcs").strip() or "pcs"
+    threshold = request.form.get("low_stock_threshold", "5")
+    buying_price = request.form.get("buying_price", "").strip()
+    selling_price = request.form.get("selling_price", "").strip()
+    discount_price = request.form.get("discount_price", "").strip()
+
+    if not name:
+        flash("Item er naam dite hobe.", "danger")
+        return redirect(url_for("inventory"))
+
+    duplicate = Item.query.filter(func.lower(Item.name) == name.lower(), Item.id != item.id).first()
+    if duplicate:
+        flash(f"'{name}' naam-e already onno ekta item ache.", "danger")
+        return redirect(url_for("inventory"))
+
+    item.name = name
+    item.category = effective_category or None
+    item.unit = unit
+    item.low_stock_threshold = int(threshold or 5)
+    item.buying_price = float(buying_price) if buying_price else None
+    item.selling_price = float(selling_price) if selling_price else None
+    item.discount_price = float(discount_price) if discount_price else None
+    db.session.commit()
+    flash(f"'{item.name}' update kora hoyeche.", "success")
     return redirect(url_for("inventory"))
 
 

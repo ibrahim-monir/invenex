@@ -77,6 +77,11 @@
           {% endif %}
         </td>
         <td class="text-end">
+          <button
+            class="btn btn-sm btn-outline-primary edit-item-btn"
+            data-bs-toggle="modal" data-bs-target="#editItemModal"
+            data-item='{{ {"id": item.id, "name": item.name, "category": item.category or "", "unit": item.unit, "threshold": item.low_stock_threshold, "buying_price": item.buying_price, "selling_price": item.selling_price, "discount_price": item.discount_price, "sku": item.sku or ""} | tojson }}'
+          ><i class="bi bi-pencil"></i></button>
           <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#stockModal{{ item.id }}"><i class="bi bi-arrow-left-right"></i> Stock In/Out</button>
           <form method="post" action="{{ url_for('delete_item', item_id=item.id) }}" class="d-inline" onsubmit="return confirm('Item ta delete korte chan?');">
             <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -196,6 +201,75 @@
   </div>
 </div>
 
+<!-- Edit Item Modal (shared, populated via JS on click) -->
+<div class="modal fade" id="editItemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="post" id="editItemForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Product Name</label>
+            <input type="text" name="name" id="editItemName" class="form-control" required>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Category</label>
+            <select name="category" id="editCategorySelect" class="form-select">
+              <option value="" data-id="">No category</option>
+              {% for cat in top_categories %}
+              <option value="{{ cat.name }}" data-id="{{ cat.id }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 mb-3">
+            <label class="form-label">Sub Category</label>
+            <select name="sub_category" id="editSubCategorySelect" class="form-select" disabled>
+              <option value="">No sub category</option>
+            </select>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">SKU</label>
+            <input type="text" id="editItemSku" class="form-control" disabled>
+            <div class="form-text">SKU edit kora jay na.</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Unit</label>
+            <input type="text" name="unit" id="editItemUnit" class="form-control">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Low Stock Alert At</label>
+            <input type="number" name="low_stock_threshold" id="editItemThreshold" class="form-control" min="0">
+          </div>
+        </div>
+        <hr>
+        <h6 class="text-muted small text-uppercase mb-2">Pricing</h6>
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Buying Price (per unit)</label>
+            <input type="number" step="0.01" name="buying_price" id="editItemBuyingPrice" class="form-control" min="0">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Regular Sale Price (per unit)</label>
+            <input type="number" step="0.01" name="selling_price" id="editItemSellingPrice" class="form-control" min="0">
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Discount Sale Price (per unit)</label>
+            <input type="number" step="0.01" name="discount_price" id="editItemDiscountPrice" class="form-control" min="0">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <datalist id="stockReasonList">
   <option value="Sponsor/Influencer (Free)">
   <option value="Damaged">
@@ -243,4 +317,69 @@
   </div>
 </div>
 {% endfor %}
+
+<script>
+  const allCategories = {{ categories_json | tojson }};
+  const editForm = document.getElementById('editItemForm');
+  const editCategorySelect = document.getElementById('editCategorySelect');
+  const editSubCategorySelect = document.getElementById('editSubCategorySelect');
+
+  function refreshEditSubCategories(selectedSubName) {
+    const selectedOption = editCategorySelect.options[editCategorySelect.selectedIndex];
+    const parentId = selectedOption ? selectedOption.dataset.id : '';
+    editSubCategorySelect.innerHTML = '';
+
+    if (!parentId) {
+      editSubCategorySelect.appendChild(new Option('No sub category', ''));
+      editSubCategorySelect.disabled = true;
+      return;
+    }
+
+    const children = allCategories.filter(c => String(c.parent_id) === String(parentId));
+    if (children.length === 0) {
+      editSubCategorySelect.appendChild(new Option('No sub category available', ''));
+      editSubCategorySelect.disabled = true;
+      return;
+    }
+
+    editSubCategorySelect.appendChild(new Option('No sub category', ''));
+    children.forEach(c => editSubCategorySelect.appendChild(new Option(c.name, c.name)));
+    editSubCategorySelect.disabled = false;
+    if (selectedSubName) editSubCategorySelect.value = selectedSubName;
+  }
+
+  editCategorySelect.addEventListener('change', () => refreshEditSubCategories(''));
+
+  document.querySelectorAll('.edit-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = JSON.parse(btn.dataset.item);
+
+      editForm.action = `/inventory/${item.id}/edit`;
+      document.getElementById('editItemName').value = item.name;
+      document.getElementById('editItemUnit').value = item.unit;
+      document.getElementById('editItemThreshold').value = item.threshold;
+      document.getElementById('editItemBuyingPrice').value = item.buying_price ?? '';
+      document.getElementById('editItemSellingPrice').value = item.selling_price ?? '';
+      document.getElementById('editItemDiscountPrice').value = item.discount_price ?? '';
+      document.getElementById('editItemSku').value = item.sku;
+
+      // Resolve the item's flat category string back into parent + sub,
+      // since Item only stores whichever level was actually chosen.
+      let topName = '';
+      let subName = '';
+      const match = allCategories.find(c => c.name === item.category);
+      if (match) {
+        if (match.parent_id) {
+          const parent = allCategories.find(c => c.id === match.parent_id);
+          topName = parent ? parent.name : '';
+          subName = match.name;
+        } else {
+          topName = match.name;
+        }
+      }
+      editCategorySelect.value = topName;
+      refreshEditSubCategories(subName);
+    });
+  });
+</script>
 {% endblock %}
