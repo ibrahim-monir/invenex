@@ -540,11 +540,21 @@ def export_inventory():
     )
 
 
+def _generate_sku(category_name):
+    """Category prefix + the next free serial in that category, e.g. ELE-003."""
+    prefix = "".join(ch for ch in (category_name or "GEN").upper() if ch.isalnum())[:3] or "GEN"
+    serial = 1
+    while True:
+        candidate = f"{prefix}-{serial:03d}"
+        if not Item.query.filter(func.lower(Item.sku) == candidate.lower()).first():
+            return candidate
+        serial += 1
+
+
 @app.route("/inventory/add", methods=["POST"])
 @login_required
 def add_item():
     name = request.form.get("name", "").strip()
-    sku = request.form.get("sku", "").strip()
     category = request.form.get("category", "").strip()
     unit = request.form.get("unit", "pcs").strip() or "pcs"
     quantity = request.form.get("quantity", "0")
@@ -584,13 +594,9 @@ def add_item():
         flash(f"'{existing.name}' already storage-e chilo - {quantity_int} {existing.unit} notun stock add kora hoyeche.", "success")
         return redirect(url_for("inventory"))
 
-    if sku and Item.query.filter(func.lower(Item.sku) == sku.lower()).first():
-        flash(f"SKU '{sku}' already ekta item-e use hoyeche. Onno SKU diye try korun.", "danger")
-        return redirect(url_for("inventory"))
-
     item = Item(
         name=name,
-        sku=sku or None,
+        sku=_generate_sku(category),
         category=category or None,
         unit=unit,
         quantity=quantity_int,

@@ -204,8 +204,8 @@
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">SKU</label>
-            <input type="text" name="sku" id="newItemSku" class="form-control" placeholder="ex: SKU-001">
-            <div id="skuWarning" class="text-danger small mt-1 d-none"><i class="bi bi-exclamation-triangle"></i> Ei SKU already use hocche!</div>
+            <input type="text" class="form-control" value="Auto (category-based)" disabled>
+            <div class="form-text">Category onujayi serial diye auto set hobe, edit kora jabe na.</div>
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">Category</label>
@@ -311,22 +311,7 @@
 {% endfor %}
 
 <script>
-  const existingSkus = new Set(
-    {{ all_items | selectattr('sku') | map(attribute='sku') | list | tojson }}.map(s => s.toLowerCase())
-  );
-  const skuInput = document.getElementById('newItemSku');
-  const skuWarning = document.getElementById('skuWarning');
   const stockInSaveBtn = document.getElementById('stockInSaveBtn');
-
-  if (skuInput) {
-    skuInput.addEventListener('input', () => {
-      const val = skuInput.value.trim().toLowerCase();
-      const isDuplicate = val !== '' && existingSkus.has(val);
-      skuWarning.classList.toggle('d-none', !isDuplicate);
-      skuInput.classList.toggle('is-invalid', isDuplicate);
-      if (stockInSaveBtn) stockInSaveBtn.disabled = isDuplicate;
-    });
-  }
 
   const existingItemNames = new Set(
     {{ all_items | map(attribute='name') | list | tojson }}.map(n => n.toLowerCase())
