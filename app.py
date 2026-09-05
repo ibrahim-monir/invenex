@@ -544,11 +544,34 @@ def add_item():
         flash("Item er naam dite hobe.", "danger")
         return redirect(url_for("inventory"))
 
+    quantity_int = int(quantity or 0)
+
+    # An existing item with the same name means this is a restock, not a new
+    # product - adding a duplicate row would split one product's stock across
+    # two entries. Just add to what's already there instead.
+    existing = Item.query.filter(func.lower(Item.name) == name.lower()).first()
+    if existing:
+        existing.quantity += quantity_int
+        if quantity_int > 0:
+            db.session.add(StockLog(
+                item_id=existing.id,
+                change_type="in",
+                movement_type="restock",
+                quantity=quantity_int,
+                reason="Restock",
+                supplier=supplier or None,
+                po_number=po_number or None,
+                po_batch=po_batch or None,
+                entry_date=date.today(),
+            ))
+        db.session.commit()
+        flash(f"'{existing.name}' already storage-e chilo - {quantity_int} {existing.unit} notun stock add kora hoyeche.", "success")
+        return redirect(url_for("inventory"))
+
     if sku and Item.query.filter(func.lower(Item.sku) == sku.lower()).first():
         flash(f"SKU '{sku}' already ekta item-e use hoyeche. Onno SKU diye try korun.", "danger")
         return redirect(url_for("inventory"))
 
-    quantity_int = int(quantity or 0)
     item = Item(
         name=name,
         sku=sku or None,

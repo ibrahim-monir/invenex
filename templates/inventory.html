@@ -171,7 +171,11 @@
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label">Product Name</label>
-            <input type="text" name="name" class="form-control" required>
+            <input type="text" name="name" id="newItemName" class="form-control" list="existingItemNameList" placeholder="Existing item hole naam select korun - stock ota-i add hobe" required>
+            <datalist id="existingItemNameList">
+              {% for item in all_items %}<option value="{{ item.name }}">{% endfor %}
+            </datalist>
+            <div id="existingItemHint" class="text-primary small mt-1 d-none"><i class="bi bi-info-circle"></i> Ei naam-er item age theke ache &mdash; SKU/price change hobe na, shudhu stock quantity add hobe.</div>
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">SKU</label>
@@ -291,6 +295,20 @@
       skuWarning.classList.toggle('d-none', !isDuplicate);
       skuInput.classList.toggle('is-invalid', isDuplicate);
       if (stockInSaveBtn) stockInSaveBtn.disabled = isDuplicate;
+    });
+  }
+
+  const existingItemNames = new Set(
+    {{ all_items | map(attribute='name') | list | tojson }}.map(n => n.toLowerCase())
+  );
+  const nameInput = document.getElementById('newItemName');
+  const existingItemHint = document.getElementById('existingItemHint');
+
+  if (nameInput) {
+    nameInput.addEventListener('input', () => {
+      const isExisting = existingItemNames.has(nameInput.value.trim().toLowerCase());
+      existingItemHint.classList.toggle('d-none', !isExisting);
+      if (stockInSaveBtn) stockInSaveBtn.textContent = isExisting ? 'Add Stock' : 'Save';
     });
   }
 </script>
