@@ -10,6 +10,7 @@
     :root {
       --sidebar-width: 235px;
       --topbar-height: 58px;
+      --footer-height: 45px;
       --color-primary: #2a78d6;
       --color-primary-dark: #184f95;
       --color-danger: #e34948;
@@ -17,7 +18,7 @@
       --color-warning: #eda100;
       --color-bg: #f4f6f9;
     }
-    body { background: var(--color-bg); display: flex; flex-direction: column; min-height: 100vh; }
+    body { background: var(--color-bg); min-height: 100vh; }
 
     .topbar {
       position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-height);
@@ -48,17 +49,23 @@
     .sidebar .submenu-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
     .sidebar .submenu-link { padding-left: 2.7rem; font-size: .87rem; }
 
-    .content-wrap { margin-left: var(--sidebar-width); margin-top: var(--topbar-height); padding: 1.5rem; flex: 1 0 auto; }
+    .content-wrap { margin-left: var(--sidebar-width); margin-top: var(--topbar-height); padding: 1.5rem; padding-bottom: calc(var(--footer-height) + 1.5rem); min-height: calc(100vh - var(--topbar-height)); }
+    body > .container { padding-bottom: calc(var(--footer-height) + 1.5rem); }
 
-    .app-footer { flex-shrink: 0; padding: 1rem 1.5rem; text-align: center; color: #6c757d; font-size: .85rem; border-top: 1px solid #e5e7eb; background: #fff; }
-    .app-footer.with-sidebar { margin-left: var(--sidebar-width); }
+    .app-footer {
+      position: fixed; left: 0; right: 0; bottom: 0; height: var(--footer-height);
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 1.5rem; text-align: center; color: #6c757d; font-size: .85rem;
+      border-top: 1px solid #e5e7eb; background: #fff; z-index: 1010;
+    }
+    .app-footer.with-sidebar { left: var(--sidebar-width); }
     .app-footer a { color: var(--color-primary); text-decoration: none; }
 
     @media (max-width: 900px) {
       .sidebar { transform: translateX(-100%); }
       .sidebar.open { transform: translateX(0); box-shadow: 2px 0 10px rgba(0,0,0,.2); }
       .content-wrap { margin-left: 0; }
-      .app-footer.with-sidebar { margin-left: 0; }
+      .app-footer.with-sidebar { left: 0; }
       .sidebar-toggle { display: inline-block; }
     }
 
