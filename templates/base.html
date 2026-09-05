@@ -81,12 +81,17 @@
 
     .app-footer {
       position: fixed; left: 0; right: 0; bottom: 0; height: var(--footer-height);
-      display: flex; align-items: center; justify-content: center;
-      padding: 0 1.5rem; text-align: center; color: #6c757d; font-size: .85rem;
-      border-top: 1px solid #e5e7eb; background: #fff; z-index: 1010;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 0 1.5rem; color: #8a93a3; font-size: .8rem;
+      background: rgba(255,255,255,.92); backdrop-filter: blur(6px);
+      border-top: 1px solid #e9ebef; z-index: 1010;
     }
     .app-footer.with-sidebar { left: var(--sidebar-width); }
-    .app-footer a { color: var(--color-primary); text-decoration: none; }
+    .app-footer .footer-brand { display: flex; align-items: center; gap: .4rem; font-weight: 600; color: #495057; }
+    .app-footer .footer-brand i { color: var(--color-primary); }
+    .app-footer .footer-sep { opacity: .5; }
+    .app-footer a { color: var(--color-primary); text-decoration: none; font-weight: 500; }
+    .app-footer a:hover { text-decoration: underline; }
 
     @media (max-width: 900px) {
       .sidebar { transform: translateX(-100%); }
@@ -96,7 +101,19 @@
       .mobile-menu-btn { display: flex; }
     }
 
+    @media (max-width: 700px) {
+      .app-footer { justify-content: center; overflow-x: auto; white-space: nowrap; }
+      .app-footer .footer-tagline { display: none; }
+    }
+
     .card { border: none; border-radius: .6rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+    .page-header {
+      background: #fff; border-radius: .6rem; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      padding: 1.1rem 1.5rem; margin-bottom: 1.5rem;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem;
+    }
+    .page-header-eyebrow { color: #9aa2b1; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .15rem; }
 
     /* Colorful stat cards */
     .stat-card { border: none; border-radius: .6rem; color: #fff; padding: 1.25rem; box-shadow: 0 3px 8px rgba(0,0,0,.12); }
@@ -204,6 +221,15 @@
   {% endif %}
 
   <div class="{{ 'content-wrap' if current_user.is_authenticated else 'container' }}">
+    {% if current_user.is_authenticated %}
+    <div class="page-header">
+      <div>
+        <div class="page-header-eyebrow">{{ current_date }}</div>
+        <h4 class="mb-0">Welcome, {{ admin_display_name }}!</h4>
+      </div>
+    </div>
+    {% endif %}
+
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -219,8 +245,12 @@
   </div>
 
   <footer class="app-footer {{ 'with-sidebar' if current_user.is_authenticated else '' }}">
-    &copy; {{ current_year }} Invenex &middot; Inventory, Income &amp; Expense Manager
-    &middot; Developed by&nbsp;<a href="https://ibrahimmonir.com" target="_blank" rel="noopener">Ibrahim Monir</a>
+    <span class="footer-brand"><i class="bi bi-boxes"></i> Invenex</span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="footer-tagline">&copy; {{ current_year }} &middot; Inventory, Income &amp; Expense Manager</span>
+      <span class="footer-sep d-none d-sm-inline">&middot;</span>
+      <span>Developed by&nbsp;<a href="https://ibrahimmonir.com" target="_blank" rel="noopener">Ibrahim Monir</a></span>
+    </span>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

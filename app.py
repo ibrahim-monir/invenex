@@ -101,6 +101,7 @@ def inject_globals():
         "admin_display_name": profile.display_name or ADMIN_DISPLAY_NAME,
         "admin_avatar": profile.avatar_filename,
         "current_year": date.today().year,
+        "current_date": date.today().strftime("%d %B %Y"),
         "movement_type_labels": MOVEMENT_TYPE_LABELS,
     }
 
