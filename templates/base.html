@@ -82,16 +82,16 @@
     .app-footer {
       position: fixed; left: 0; right: 0; bottom: 0; height: var(--footer-height);
       display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-      padding: 0 1.5rem; color: #8a93a3; font-size: .8rem;
-      background: rgba(255,255,255,.92); backdrop-filter: blur(6px);
-      border-top: 1px solid #e9ebef; z-index: 1010;
+      padding: 0 1.5rem; color: rgba(255,255,255,.9); font-size: .8rem;
+      background: linear-gradient(90deg, var(--sidebar-bg) 0%, var(--color-primary-dark) 55%, var(--color-primary) 100%);
+      box-shadow: 0 -2px 8px rgba(0,0,0,.12); z-index: 1010;
     }
     .app-footer.with-sidebar { left: var(--sidebar-width); }
-    .app-footer .footer-brand { display: flex; align-items: center; gap: .4rem; font-weight: 600; color: #495057; }
-    .app-footer .footer-brand i { color: var(--color-primary); }
+    .app-footer .footer-brand { display: flex; align-items: center; gap: .4rem; font-weight: 700; color: #fff; }
+    .app-footer .footer-brand i { color: #ffce56; }
     .app-footer .footer-sep { opacity: .5; }
-    .app-footer a { color: var(--color-primary); text-decoration: none; font-weight: 500; }
-    .app-footer a:hover { text-decoration: underline; }
+    .app-footer a { color: #fff; text-decoration: underline; font-weight: 600; }
+    .app-footer a:hover { color: #ffce56; }
 
     @media (max-width: 900px) {
       .sidebar { transform: translateX(-100%); }
@@ -163,7 +163,7 @@
 
     <a class="identity" href="{{ url_for('profile') }}">
       {% if admin_avatar %}
-        <img src="{{ url_for('static', filename='uploads/' + admin_avatar) }}" class="identity-avatar" alt="Avatar">
+        <img src="{{ url_for('uploaded_file', filename=admin_avatar) }}" class="identity-avatar" alt="Avatar">
       {% else %}
         <div class="identity-avatar-fallback"><i class="bi bi-person-fill"></i></div>
       {% endif %}

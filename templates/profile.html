@@ -9,7 +9,7 @@
       <form method="post" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
         <div class="text-center mb-4">
           {% if profile.avatar_filename %}
-            <img src="{{ url_for('static', filename='uploads/' + profile.avatar_filename) }}"
+            <img src="{{ url_for('uploaded_file', filename=profile.avatar_filename) }}"
                  class="rounded-circle mb-2" style="width:100px;height:100px;object-fit:cover;" alt="Avatar">
           {% else %}
             <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white mb-2" style="width:100px;height:100px;">

@@ -5,7 +5,7 @@ from calendar import month_abbr
 from datetime import date, datetime
 
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, redirect, render_template, request, url_for
+from flask import Flask, Response, flash, redirect, render_template, request, send_from_directory, url_for
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from flask_login import (
@@ -58,7 +58,7 @@ else:
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB upload limit
 
-UPLOAD_FOLDER = os.path.join(app.root_path, "static", "uploads")
+UPLOAD_FOLDER = os.path.join(app.root_path, "data", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 db.init_app(app)
@@ -223,6 +223,14 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("login"))
+
+
+@app.route("/uploads/<path:filename>")
+def uploaded_file(filename):
+    # Served from the persistent data disk (not static/) so it survives a
+    # redeploy the same way the database does - static/ is rebuilt from the
+    # git checkout on every deploy and would silently drop these otherwise.
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 
 @app.route("/profile")
