@@ -125,6 +125,7 @@ def _add_missing_columns():
             ("po_batch", "VARCHAR(60)"),
         ],
         "sales": [("stock_log_id", "INTEGER")],
+        "categories": [("parent_id", "INTEGER")],
     }
     for table, columns in required.items():
         if table not in inspector.get_table_names():
@@ -468,11 +469,15 @@ def inventory():
 @login_required
 def add_item_page():
     all_items = Item.query.order_by(Item.name).all()
-    categories = Category.query.order_by(Category.name).all()
+    top_categories = Category.query.filter_by(parent_id=None).order_by(Category.name).all()
+    all_categories = Category.query.order_by(Category.name).all()
+    categories_json = [{"id": c.id, "name": c.name, "parent_id": c.parent_id} for c in all_categories]
     return render_template(
         "add_item.html",
         all_items=all_items,
-        categories=categories,
+        categories=top_categories,
+        all_categories=all_categories,
+        categories_json=categories_json,
         today=date.today().isoformat(),
     )
 
@@ -569,6 +574,9 @@ def _generate_sku(category_name):
 def add_item():
     name = request.form.get("name", "").strip()
     category = request.form.get("category", "").strip()
+    sub_category = request.form.get("sub_category", "").strip()
+    # The sub-category is the more specific classification when picked.
+    effective_category = sub_category or category
     unit = request.form.get("unit", "pcs").strip() or "pcs"
     quantity = request.form.get("quantity", "0")
     threshold = request.form.get("low_stock_threshold", "5")
@@ -609,8 +617,8 @@ def add_item():
 
     item = Item(
         name=name,
-        sku=_generate_sku(category),
-        category=category or None,
+        sku=_generate_sku(effective_category),
+        category=effective_category or None,
         unit=unit,
         quantity=quantity_int,
         low_stock_threshold=int(threshold or 5),
@@ -643,6 +651,7 @@ def add_item():
 @login_required
 def add_category():
     name = request.form.get("name", "").strip()
+    parent_id = request.form.get("parent_id", "").strip()
     next_url = request.form.get("next", "")
     if not next_url.startswith("/") or next_url.startswith("//"):
         next_url = url_for("inventory")
@@ -651,11 +660,21 @@ def add_category():
         flash("Category naam dite hobe.", "danger")
         return redirect(next_url)
 
+    parent = None
+    if parent_id:
+        parent = Category.query.get(int(parent_id))
+        if not parent:
+            flash("Parent category paoa jayni.", "danger")
+            return redirect(next_url)
+        if parent.parent_id is not None:
+            flash("Sub-category-r nicheh aro sub-category banano jay na.", "danger")
+            return redirect(next_url)
+
     if Category.query.filter(func.lower(Category.name) == name.lower()).first():
         flash(f"Category '{name}' already ache.", "danger")
         return redirect(next_url)
 
-    db.session.add(Category(name=name))
+    db.session.add(Category(name=name, parent_id=parent.id if parent else None))
     db.session.commit()
     flash(f"Category '{name}' add kora hoyeche.", "success")
     return redirect(next_url)

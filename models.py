@@ -18,7 +18,10 @@ class Category(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False, unique=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    parent = db.relationship("Category", remote_side=[id], backref="subcategories")
 
 
 class Item(db.Model):

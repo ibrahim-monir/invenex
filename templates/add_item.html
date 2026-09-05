@@ -30,7 +30,7 @@
     <hr>
     <h6 class="text-muted small text-uppercase mb-2">Product Info</h6>
     <div class="row">
-      <div class="col-md-6 mb-3">
+      <div class="col-md-4 mb-3">
         <label class="form-label">Product Name</label>
         <input type="text" name="name" id="newItemName" class="form-control" list="existingItemNameList" placeholder="Existing item hole naam select korun - stock ota-i add hobe" required>
         <datalist id="existingItemNameList">
@@ -39,21 +39,27 @@
         <div id="existingItemHint" class="text-primary small mt-1 d-none"><i class="bi bi-info-circle"></i> Ei naam-er item age theke ache &mdash; SKU/price change hobe na, shudhu stock quantity add hobe.</div>
       </div>
       <div class="col-md-3 mb-3">
-        <label class="form-label">SKU</label>
-        <input type="text" class="form-control" value="Auto (category-based)" disabled>
-        <div class="form-text">Category onujayi serial diye auto set hobe, edit kora jabe na.</div>
-      </div>
-      <div class="col-md-3 mb-3">
         <label class="form-label">Category</label>
-        <select name="category" class="form-select">
-          <option value="">No category</option>
+        <select name="category" id="categorySelect" class="form-select">
+          <option value="" data-id="">No category</option>
           {% for cat in categories %}
-          <option value="{{ cat.name }}">{{ cat.name }}</option>
+          <option value="{{ cat.name }}" data-id="{{ cat.id }}">{{ cat.name }}</option>
           {% endfor %}
         </select>
         {% if not categories %}
         <div class="form-text">Kono category nei &mdash; "Add Category" button diye ekta banan.</div>
         {% endif %}
+      </div>
+      <div class="col-md-2 mb-3">
+        <label class="form-label">Sub Category</label>
+        <select name="sub_category" id="subCategorySelect" class="form-select" disabled>
+          <option value="">No sub category</option>
+        </select>
+      </div>
+      <div class="col-md-3 mb-3">
+        <label class="form-label">SKU</label>
+        <input type="text" id="skuPreview" class="form-control" value="GEN-001" disabled>
+        <div class="form-text">Category onujayi serial diye auto set hobe, edit kora jabe na.</div>
       </div>
     </div>
 
@@ -109,8 +115,18 @@
           <label class="form-label">Category Name</label>
           <input type="text" name="name" class="form-control" placeholder="ex: Electronics" required>
         </div>
-        {% if categories %}
-        <div class="small text-muted">Existing: {{ categories | map(attribute='name') | join(', ') }}</div>
+        <div class="mb-3">
+          <label class="form-label">Parent Category (optional)</label>
+          <select name="parent_id" class="form-select">
+            <option value="">No parent - top-level category</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Parent select korle eta ei category-r sub-category hisebe save hobe.</div>
+        </div>
+        {% if all_categories %}
+        <div class="small text-muted">Existing: {{ all_categories | map(attribute='name') | join(', ') }}</div>
         {% endif %}
       </div>
       <div class="modal-footer">
@@ -136,5 +152,67 @@
       if (stockInSaveBtn) stockInSaveBtn.textContent = isExisting ? 'Add Stock' : 'Save Item';
     });
   }
+
+  // Sub Category is only enabled once a parent Category is picked, and only
+  // shows that parent's own sub-categories.
+  const allCategories = {{ categories_json | tojson }};
+  const categorySelect = document.getElementById('categorySelect');
+  const subCategorySelect = document.getElementById('subCategorySelect');
+
+  function refreshSubCategories() {
+    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+    const parentId = selectedOption ? selectedOption.dataset.id : '';
+    subCategorySelect.innerHTML = '';
+
+    if (!parentId) {
+      subCategorySelect.appendChild(new Option('No sub category', ''));
+      subCategorySelect.disabled = true;
+      return;
+    }
+
+    const children = allCategories.filter(c => String(c.parent_id) === String(parentId));
+    if (children.length === 0) {
+      subCategorySelect.appendChild(new Option('No sub category available', ''));
+      subCategorySelect.disabled = true;
+      return;
+    }
+
+    subCategorySelect.appendChild(new Option('No sub category', ''));
+    children.forEach(c => subCategorySelect.appendChild(new Option(c.name, c.name)));
+    subCategorySelect.disabled = false;
+  }
+
+  // Mirrors the server's _generate_sku() exactly, so the preview always
+  // matches what actually gets saved.
+  const existingSkus = new Set(
+    {{ all_items | selectattr('sku') | map(attribute='sku') | list | tojson }}.map(s => s.toLowerCase())
+  );
+  const skuPreview = document.getElementById('skuPreview');
+
+  function computeSku(categoryName) {
+    let prefix = (categoryName || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+    if (!prefix) prefix = 'GEN';
+    let serial = 1;
+    while (existingSkus.has(`${prefix}-${String(serial).padStart(3, '0')}`.toLowerCase())) serial++;
+    return `${prefix}-${String(serial).padStart(3, '0')}`;
+  }
+
+  function refreshSkuPreview() {
+    const effectiveCategory = subCategorySelect.value || categorySelect.value;
+    skuPreview.value = computeSku(effectiveCategory);
+  }
+
+  if (categorySelect) {
+    categorySelect.addEventListener('change', () => {
+      refreshSubCategories();
+      refreshSkuPreview();
+    });
+  }
+  if (subCategorySelect) {
+    subCategorySelect.addEventListener('change', refreshSkuPreview);
+  }
+
+  refreshSubCategories();
+  refreshSkuPreview();
 </script>
 {% endblock %}
