@@ -35,11 +35,16 @@
       background: var(--sidebar-bg); display: flex; flex-direction: column;
       z-index: 1020; transition: transform .2s ease;
     }
+    .sidebar-top-row { display: flex; align-items: center; justify-content: space-between; }
     .sidebar .brand {
       display: flex; align-items: center; gap: .5rem; color: #fff; text-decoration: none;
       font-weight: 700; font-size: 1.1rem; padding: 1.1rem 1.25rem .75rem;
     }
     .sidebar .brand:hover { color: #fff; }
+    .sidebar-close-btn {
+      display: none; background: transparent; border: none; color: #fff;
+      font-size: 1.1rem; margin-right: 1rem;
+    }
     .sidebar .identity {
       display: flex; flex-direction: column; align-items: center; gap: .5rem;
       text-align: center; text-decoration: none; padding: .75rem 1rem 1.15rem;
@@ -96,9 +101,11 @@
     @media (max-width: 900px) {
       .sidebar { transform: translateX(-100%); }
       .sidebar.open { transform: translateX(0); box-shadow: 2px 0 10px rgba(0,0,0,.3); }
+      .mobile-menu-btn.hidden-while-open { display: none; }
       .content-wrap { margin-left: 0; padding-top: 4.5rem; }
       .app-footer.with-sidebar { left: 0; }
       .mobile-menu-btn { display: flex; }
+      .sidebar-close-btn { display: inline-block; }
     }
 
     @media (max-width: 700px) {
@@ -159,7 +166,10 @@
   <button class="mobile-menu-btn" id="sidebarToggle" type="button" aria-label="Toggle menu"><i class="bi bi-list"></i></button>
 
   <nav class="sidebar" id="sidebar">
-    <a class="brand" href="{{ url_for('dashboard') }}"><i class="bi bi-boxes"></i> Invenex</a>
+    <div class="sidebar-top-row">
+      <a class="brand" href="{{ url_for('dashboard') }}"><i class="bi bi-boxes"></i> Invenex</a>
+      <button class="sidebar-close-btn" id="sidebarClose" type="button" aria-label="Close menu"><i class="bi bi-x-lg"></i></button>
+    </div>
 
     <a class="identity" href="{{ url_for('profile') }}">
       {% if admin_avatar %}
@@ -256,9 +266,28 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const toggleBtn = document.getElementById('sidebarToggle');
+    const closeBtn = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('sidebar');
+
+    function setSidebarOpen(open) {
+      sidebar.classList.toggle('open', open);
+      // The floating hamburger sits where the sidebar's own brand text is
+      // once open, so hide it until the sidebar closes again.
+      if (toggleBtn) toggleBtn.classList.toggle('hidden-while-open', open);
+    }
+
     if (toggleBtn && sidebar) {
-      toggleBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
+      toggleBtn.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+    }
+    if (closeBtn && sidebar) {
+      closeBtn.addEventListener('click', () => setSidebarOpen(false));
+    }
+    if (sidebar) {
+      // Excludes the Inventory/Accounts togglers - those expand a submenu
+      // in place and shouldn't close the sidebar out from under the user.
+      sidebar.querySelectorAll('a.nav-link:not(.submenu-toggle)').forEach((link) => {
+        link.addEventListener('click', () => setSidebarOpen(false));
+      });
     }
   </script>
 </body>
