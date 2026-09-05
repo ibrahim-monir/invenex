@@ -172,8 +172,8 @@
     </div>
 
     <a class="identity" href="{{ url_for('profile') }}">
-      {% if admin_avatar %}
-        <img src="{{ url_for('uploaded_file', filename=admin_avatar) }}" class="identity-avatar" alt="Avatar">
+      {% if admin_has_avatar %}
+        <img src="{{ url_for('profile_avatar') }}?v={{ admin_avatar_version }}" class="identity-avatar" alt="Avatar">
       {% else %}
         <div class="identity-avatar-fallback"><i class="bi bi-person-fill"></i></div>
       {% endif %}

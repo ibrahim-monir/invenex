@@ -9,8 +9,8 @@
       <form method="post" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
         <div class="text-center mb-4">
           <div id="avatarPreviewWrapper">
-            {% if profile.avatar_filename %}
-              <img src="{{ url_for('uploaded_file', filename=profile.avatar_filename) }}"
+            {% if profile.avatar_data %}
+              <img src="{{ url_for('profile_avatar') }}?v={{ profile.avatar_version or 0 }}"
                    class="rounded-circle mb-2" style="width:100px;height:100px;object-fit:cover;" alt="Avatar">
             {% else %}
               <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white mb-2" style="width:100px;height:100px;">
@@ -31,7 +31,7 @@
           <div class="form-text">PNG, JPG, GIF ba WEBP &middot; max 2MB &middot; best result: square image, kompokkhe 300x300px</div>
         </div>
 
-        {% if profile.avatar_filename %}
+        {% if profile.avatar_data %}
         <div class="mb-3 form-check">
           <input type="checkbox" name="remove_avatar" value="1" class="form-check-input" id="removeAvatar">
           <label class="form-check-label" for="removeAvatar">Current profile picture remove korun</label>

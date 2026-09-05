@@ -11,6 +11,9 @@ class Profile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     display_name = db.Column(db.String(100))
     avatar_filename = db.Column(db.String(200))
+    avatar_data = db.Column(db.Text)
+    avatar_mimetype = db.Column(db.String(50))
+    avatar_version = db.Column(db.Integer, default=0)
 
 
 class Category(db.Model):

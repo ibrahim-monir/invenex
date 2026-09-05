@@ -1,3 +1,4 @@
+import base64
 import csv
 import io
 import os
@@ -5,7 +6,7 @@ from calendar import month_abbr
 from datetime import date, datetime
 
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, redirect, render_template, request, send_from_directory, url_for
+from flask import Flask, Response, abort, flash, redirect, render_template, request, url_for
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from flask_login import (
@@ -18,7 +19,6 @@ from flask_login import (
 )
 from sqlalchemy import func, inspect, text
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
 
 import google_backup
 from models import Category, Expense, Income, Item, Profile, Purchase, PurchaseLine, Sale, StockLog, Supplier, db
@@ -58,9 +58,6 @@ else:
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2MB upload limit
 
-UPLOAD_FOLDER = os.path.join(app.root_path, "data", "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 db.init_app(app)
 
 login_manager = LoginManager()
@@ -99,7 +96,8 @@ def inject_globals():
     profile = get_profile()
     return {
         "admin_display_name": profile.display_name or ADMIN_DISPLAY_NAME,
-        "admin_avatar": profile.avatar_filename,
+        "admin_has_avatar": bool(profile.avatar_data),
+        "admin_avatar_version": profile.avatar_version or 0,
         "current_year": date.today().year,
         "current_date": date.today().strftime("%d %B %Y"),
         "movement_type_labels": MOVEMENT_TYPE_LABELS,
@@ -127,6 +125,11 @@ def _add_missing_columns():
         ],
         "sales": [("stock_log_id", "INTEGER")],
         "categories": [("parent_id", "INTEGER")],
+        "profile": [
+            ("avatar_data", "TEXT"),
+            ("avatar_mimetype", "VARCHAR(50)"),
+            ("avatar_version", "INTEGER"),
+        ],
     }
     for table, columns in required.items():
         if table not in inspector.get_table_names():
@@ -184,6 +187,10 @@ def _stock_log_sheet_row(log):
     ]
 
 
+def _profile_sheet_row(row):
+    return [row.id, row.display_name or "", "(set)" if row.avatar_data else ""]
+
+
 with app.app_context():
     db.create_all()
     _add_missing_columns()
@@ -196,6 +203,13 @@ with app.app_context():
             "stock_logs": (
                 ["Date", "Item", "Type", "Category", "Quantity", "Reason", "Supplier", "PO Number", "PO Batch"],
                 _stock_log_sheet_row,
+            ),
+            # The raw column dump would otherwise ship the avatar's whole
+            # base64 blob to Sheets on every single commit anywhere in the
+            # app, since a flush now syncs every table each time.
+            "profile": (
+                ["ID", "Display Name", "Avatar"],
+                _profile_sheet_row,
             ),
         })
 
@@ -225,33 +239,18 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/uploads-status")
+@app.route("/profile/avatar")
 @login_required
-def uploads_status():
-    """Plain-language check of why an avatar might not be showing."""
+def profile_avatar():
+    # Stored as a base64 blob in the database instead of a file on disk:
+    # Render's filesystem outside the Google-Drive-backed db is ephemeral, so
+    # a file written to any path (uploads/, data/, anywhere) is gone on the
+    # next deploy or restart - only what's inside the db survives, because
+    # that's the one thing google_backup.py restores from Drive on boot.
     profile_row = get_profile()
-    exists = os.path.isdir(UPLOAD_FOLDER)
-    files = os.listdir(UPLOAD_FOLDER) if exists else []
-    avatar_path = (
-        os.path.join(UPLOAD_FOLDER, profile_row.avatar_filename)
-        if profile_row.avatar_filename else None
-    )
-    return {
-        "upload_folder": UPLOAD_FOLDER,
-        "upload_folder_exists": exists,
-        "files_in_upload_folder": files,
-        "profile_avatar_filename": profile_row.avatar_filename,
-        "avatar_file_exists_on_disk": os.path.exists(avatar_path) if avatar_path else None,
-        "sqlite_db_path": SQLITE_DB_PATH,
-    }
-
-
-@app.route("/uploads/<path:filename>")
-def uploaded_file(filename):
-    # Served from the persistent data disk (not static/) so it survives a
-    # redeploy the same way the database does - static/ is rebuilt from the
-    # git checkout on every deploy and would silently drop these otherwise.
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    if not profile_row.avatar_data:
+        abort(404)
+    return Response(base64.b64decode(profile_row.avatar_data), mimetype=profile_row.avatar_mimetype or "image/png")
 
 
 @app.route("/profile")
@@ -278,20 +277,13 @@ def update_profile():
             flash("Shudhu image file (png, jpg, jpeg, gif, webp) upload kora jabe.", "danger")
             return redirect(url_for("profile"))
 
-        filename = secure_filename(f"avatar_{int(datetime.utcnow().timestamp())}.{ext}")
-        old_filename = profile_row.avatar_filename
-        avatar.save(os.path.join(UPLOAD_FOLDER, filename))
-        profile_row.avatar_filename = filename
-
-        if old_filename:
-            old_path = os.path.join(UPLOAD_FOLDER, old_filename)
-            if os.path.exists(old_path):
-                os.remove(old_path)
-    elif remove_avatar and profile_row.avatar_filename:
-        old_path = os.path.join(UPLOAD_FOLDER, profile_row.avatar_filename)
-        if os.path.exists(old_path):
-            os.remove(old_path)
-        profile_row.avatar_filename = None
+        profile_row.avatar_data = base64.b64encode(avatar.read()).decode("ascii")
+        profile_row.avatar_mimetype = avatar.mimetype or f"image/{ext}"
+        profile_row.avatar_version = (profile_row.avatar_version or 0) + 1
+    elif remove_avatar and profile_row.avatar_data:
+        profile_row.avatar_data = None
+        profile_row.avatar_mimetype = None
+        profile_row.avatar_version = (profile_row.avatar_version or 0) + 1
 
     db.session.commit()
     flash("Profile update kora hoyeche.", "success")
