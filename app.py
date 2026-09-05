@@ -150,10 +150,33 @@ BACKUP_MODELS = [
     Profile,
 ]
 
+def _stock_log_sheet_row(log):
+    return [
+        log.entry_date,
+        log.item.name if log.item else "",
+        log.change_type.upper() if log.change_type else "",
+        MOVEMENT_TYPE_LABELS.get(log.movement_type, ""),
+        log.quantity,
+        log.reason or "",
+        log.supplier or "",
+        log.po_number or "",
+        log.po_batch or "",
+    ]
+
+
 with app.app_context():
     db.create_all()
     _add_missing_columns()
     google_backup.start(app, db.session, BACKUP_MODELS)
+    if google_backup.backup is not None:
+        # Same shape as the Stock History CSV export - readable in the sheet
+        # itself instead of the raw id/item_id/change_type columns.
+        google_backup.backup.register_formatters({
+            "stock_logs": (
+                ["Date", "Item", "Type", "Category", "Quantity", "Reason", "Supplier", "PO Number", "PO Batch"],
+                _stock_log_sheet_row,
+            ),
+        })
 
 
 @app.route("/login", methods=["GET", "POST"])

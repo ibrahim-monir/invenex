@@ -132,6 +132,7 @@ class GoogleBackup:
         self._stopping = threading.Event()
         self._last_sheet_sync = 0.0
         self._models = []
+        self._formatters = {}
         self._app = None
         self._session_factory = None
 
@@ -387,22 +388,39 @@ class GoogleBackup:
     def register_models(self, models):
         self._models = list(models)
 
+    def register_formatters(self, formatters):
+        """Override the raw column dump for specific tables.
+
+        `formatters` maps a table name to (headers, row_fn), where row_fn
+        takes one record and returns a list of cell values already in the
+        order of `headers`. Used for tables where the raw DB columns (ids,
+        internal codes) are far less readable than the app's own CSV export
+        already makes them look.
+        """
+        self._formatters = dict(formatters)
+
+    def _cell(self, value):
+        if value is None:
+            return ""
+        if isinstance(value, (datetime, date)):
+            return value.isoformat(sep=" ") if isinstance(value, datetime) else value.isoformat()
+        if isinstance(value, (int, float)):
+            return value
+        return str(value)[:MAX_CELL_CHARS]
+
     def _sheet_rows(self, model, session):
+        formatter = self._formatters.get(model.__tablename__)
+        if formatter:
+            headers, row_fn = formatter
+            rows = [headers]
+            for record in session.query(model).all():
+                rows.append([self._cell(v) for v in row_fn(record)])
+            return rows
+
         columns = [column.name for column in model.__table__.columns]
         rows = [columns]
         for record in session.query(model).all():
-            row = []
-            for column in columns:
-                value = getattr(record, column, None)
-                if value is None:
-                    row.append("")
-                elif isinstance(value, (datetime, date)):
-                    row.append(value.isoformat(sep=" ") if isinstance(value, datetime) else value.isoformat())
-                elif isinstance(value, (int, float)):
-                    row.append(value)
-                else:
-                    row.append(str(value)[:MAX_CELL_CHARS])
-            rows.append(row)
+            rows.append([self._cell(getattr(record, column, None)) for column in columns])
         return rows
 
     def _ensure_tabs(self, wanted):
