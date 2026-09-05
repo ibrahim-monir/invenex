@@ -125,76 +125,73 @@
       </div>
     </form>
   </div>
-  <div class="row g-0">
-    <div class="col-md-6 border-end">
-      <h6 class="text-primary px-3 pt-3 mb-0"><i class="bi bi-graph-up-arrow"></i> Income</h6>
-      <div class="table-responsive">
-        <table class="table align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Purpose</th>
-              <th>Category</th>
-              <th class="text-end">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in report_income_entries %}
-            <tr>
-              <td>{{ entry.entry_date }}</td>
-              <td>{{ entry.purpose }}</td>
-              <td>{{ entry.category or "" }}</td>
-              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-center text-muted">Ei date range e kono income nei.</td></tr>
-            {% endfor %}
-          </tbody>
-          {% if report_income_entries %}
-          <tfoot>
-            <tr class="table-light fw-bold">
-              <td colspan="3">Total</td>
-              <td class="text-end text-success">৳{{ "%.2f"|format(period_income) }}</td>
-            </tr>
-          </tfoot>
-          {% endif %}
-        </table>
-      </div>
+  <div>
+    <h6 class="text-primary px-3 pt-3 mb-0"><i class="bi bi-graph-up-arrow"></i> Income</h6>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Purpose</th>
+            <th>Category</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in report_income_entries %}
+          <tr>
+            <td>{{ entry.entry_date }}</td>
+            <td>{{ entry.purpose }}</td>
+            <td>{{ entry.category or "" }}</td>
+            <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted">Ei date range e kono income nei.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if report_income_entries %}
+        <tfoot>
+          <tr class="table-light fw-bold">
+            <td colspan="3">Total</td>
+            <td class="text-end text-success">৳{{ "%.2f"|format(period_income) }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
     </div>
-    <div class="col-md-6">
-      <h6 class="text-danger px-3 pt-3 mb-0"><i class="bi bi-receipt"></i> Expense</h6>
-      <div class="table-responsive">
-        <table class="table align-middle mb-0">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Purpose</th>
-              <th>Category</th>
-              <th class="text-end">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in report_expense_entries %}
-            <tr>
-              <td>{{ entry.entry_date }}</td>
-              <td>{{ entry.purpose }}</td>
-              <td>{{ entry.category or "" }}</td>
-              <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-center text-muted">Ei date range e kono expense nei.</td></tr>
-            {% endfor %}
-          </tbody>
-          {% if report_expense_entries %}
-          <tfoot>
-            <tr class="table-light fw-bold">
-              <td colspan="3">Total</td>
-              <td class="text-end text-danger">৳{{ "%.2f"|format(period_expense) }}</td>
-            </tr>
-          </tfoot>
-          {% endif %}
-        </table>
-      </div>
+
+    <h6 class="text-danger px-3 pt-3 mb-0 border-top"><i class="bi bi-receipt"></i> Expense</h6>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Purpose</th>
+            <th>Category</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in report_expense_entries %}
+          <tr>
+            <td>{{ entry.entry_date }}</td>
+            <td>{{ entry.purpose }}</td>
+            <td>{{ entry.category or "" }}</td>
+            <td class="text-end">৳{{ "%.2f"|format(entry.amount) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-center text-muted">Ei date range e kono expense nei.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if report_expense_entries %}
+        <tfoot>
+          <tr class="table-light fw-bold">
+            <td colspan="3">Total</td>
+            <td class="text-end text-danger">৳{{ "%.2f"|format(period_expense) }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
     </div>
   </div>
   {% if daywise_rows %}
