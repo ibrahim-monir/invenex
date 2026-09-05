@@ -225,6 +225,27 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/uploads-status")
+@login_required
+def uploads_status():
+    """Plain-language check of why an avatar might not be showing."""
+    profile_row = get_profile()
+    exists = os.path.isdir(UPLOAD_FOLDER)
+    files = os.listdir(UPLOAD_FOLDER) if exists else []
+    avatar_path = (
+        os.path.join(UPLOAD_FOLDER, profile_row.avatar_filename)
+        if profile_row.avatar_filename else None
+    )
+    return {
+        "upload_folder": UPLOAD_FOLDER,
+        "upload_folder_exists": exists,
+        "files_in_upload_folder": files,
+        "profile_avatar_filename": profile_row.avatar_filename,
+        "avatar_file_exists_on_disk": os.path.exists(avatar_path) if avatar_path else None,
+        "sqlite_db_path": SQLITE_DB_PATH,
+    }
+
+
 @app.route("/uploads/<path:filename>")
 def uploaded_file(filename):
     # Served from the persistent data disk (not static/) so it survives a
