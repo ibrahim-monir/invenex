@@ -29,6 +29,13 @@
           <div class="form-text">PNG, JPG, GIF ba WEBP &middot; max 2MB</div>
         </div>
 
+        {% if profile.avatar_filename %}
+        <div class="mb-3 form-check">
+          <input type="checkbox" name="remove_avatar" value="1" class="form-check-input" id="removeAvatar">
+          <label class="form-check-label" for="removeAvatar">Current profile picture remove korun</label>
+        </div>
+        {% endif %}
+
         <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg"></i> Save Changes</button>
       </form>
     </div>

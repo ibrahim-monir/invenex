@@ -240,6 +240,8 @@ def update_profile():
         profile_row.display_name = display_name
 
     avatar = request.files.get("avatar")
+    remove_avatar = request.form.get("remove_avatar") == "1"
+
     if avatar and avatar.filename:
         ext = avatar.filename.rsplit(".", 1)[-1].lower() if "." in avatar.filename else ""
         if ext not in ALLOWED_AVATAR_EXTENSIONS:
@@ -255,6 +257,11 @@ def update_profile():
             old_path = os.path.join(UPLOAD_FOLDER, old_filename)
             if os.path.exists(old_path):
                 os.remove(old_path)
+    elif remove_avatar and profile_row.avatar_filename:
+        old_path = os.path.join(UPLOAD_FOLDER, profile_row.avatar_filename)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+        profile_row.avatar_filename = None
 
     db.session.commit()
     flash("Profile update kora hoyeche.", "success")
