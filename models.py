@@ -13,6 +13,14 @@ class Profile(db.Model):
     avatar_filename = db.Column(db.String(200))
 
 
+class Category(db.Model):
+    __tablename__ = "categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Item(db.Model):
     __tablename__ = "items"
 

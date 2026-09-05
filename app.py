@@ -21,7 +21,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 import google_backup
-from models import Expense, Income, Item, Profile, Purchase, PurchaseLine, Sale, StockLog, Supplier, db
+from models import Category, Expense, Income, Item, Profile, Purchase, PurchaseLine, Sale, StockLog, Supplier, db
 
 ALLOWED_AVATAR_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
@@ -140,6 +140,7 @@ def _add_missing_columns():
 
 BACKUP_MODELS = [
     Item,
+    Category,
     StockLog,
     Sale,
     Supplier,
@@ -149,6 +150,23 @@ BACKUP_MODELS = [
     Expense,
     Profile,
 ]
+
+
+def _seed_categories_from_items():
+    """One-time backfill: existing free-typed item categories become rows.
+
+    Category used to just be whatever string was typed on an item. Now that
+    it's its own table, nothing already in use should vanish from the picker.
+    """
+    if Category.query.first() is not None:
+        return
+    existing_names = {
+        row[0] for row in db.session.query(Item.category).filter(Item.category.isnot(None)).distinct()
+    }
+    for name in sorted(existing_names):
+        if name.strip():
+            db.session.add(Category(name=name.strip()))
+    db.session.commit()
 
 def _stock_log_sheet_row(log):
     return [
@@ -167,6 +185,7 @@ def _stock_log_sheet_row(log):
 with app.app_context():
     db.create_all()
     _add_missing_columns()
+    _seed_categories_from_items()
     google_backup.start(app, db.session, BACKUP_MODELS)
     if google_backup.backup is not None:
         # Same shape as the Stock History CSV export - readable in the sheet
@@ -434,10 +453,7 @@ def backup_sync_now():
 def inventory():
     items = _filtered_items()
     all_items = Item.query.order_by(Item.name).all()
-    categories = [
-        row[0] for row in
-        db.session.query(Item.category).filter(Item.category.isnot(None)).distinct().order_by(Item.category)
-    ]
+    categories = Category.query.order_by(Category.name).all()
     return render_template(
         "inventory.html",
         items=items,
@@ -601,6 +617,25 @@ def add_item():
 
     db.session.commit()
     flash(f"'{name}' item add kora hoyeche.", "success")
+    return redirect(url_for("inventory"))
+
+
+@app.route("/categories/add", methods=["POST"])
+@login_required
+def add_category():
+    name = request.form.get("name", "").strip()
+
+    if not name:
+        flash("Category naam dite hobe.", "danger")
+        return redirect(url_for("inventory"))
+
+    if Category.query.filter(func.lower(Category.name) == name.lower()).first():
+        flash(f"Category '{name}' already ache.", "danger")
+        return redirect(url_for("inventory"))
+
+    db.session.add(Category(name=name))
+    db.session.commit()
+    flash(f"Category '{name}' add kora hoyeche.", "success")
     return redirect(url_for("inventory"))
 
 

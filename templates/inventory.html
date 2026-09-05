@@ -5,6 +5,7 @@
   <h3 class="mb-0"><i class="bi bi-box-seam text-warning"></i> Inventory</h3>
   <div class="d-flex flex-wrap gap-2">
     <a href="{{ url_for('export_inventory', **filters) }}" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Export CSV</a>
+    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addCategoryModal"><i class="bi bi-tags"></i> Add Category</button>
     <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#quickStockOutModal"><i class="bi bi-box-arrow-up"></i> Stock Out</button>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-box-arrow-in-down"></i> Stock In</button>
   </div>
@@ -21,7 +22,7 @@
     <select name="category" class="form-select form-select-sm">
       <option value="">All</option>
       {% for cat in categories %}
-      <option value="{{ cat }}" {{ 'selected' if filters.get('category') == cat else '' }}>{{ cat }}</option>
+      <option value="{{ cat.name }}" {{ 'selected' if filters.get('category') == cat.name else '' }}>{{ cat.name }}</option>
       {% endfor %}
     </select>
   </div>
@@ -141,6 +142,30 @@
   </div>
 </div>
 
+<!-- Add Category Modal -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('add_category') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Category</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Category Name</label>
+          <input type="text" name="name" class="form-control" placeholder="ex: Electronics" required>
+        </div>
+        {% if categories %}
+        <div class="small text-muted">Existing: {{ categories | map(attribute='name') | join(', ') }}</div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Save Category</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Stock In Modal -->
 <div class="modal fade" id="addItemModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
@@ -184,10 +209,15 @@
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label">Category</label>
-            <input type="text" name="category" class="form-control" list="itemCategoryList" placeholder="ex: Electronics">
-            <datalist id="itemCategoryList">
-              {% for cat in categories %}<option value="{{ cat }}">{% endfor %}
-            </datalist>
+            <select name="category" class="form-select">
+              <option value="">No category</option>
+              {% for cat in categories %}
+              <option value="{{ cat.name }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+            {% if not categories %}
+            <div class="form-text">Kono category nei &mdash; "Add Category" button diye ekta banan.</div>
+            {% endif %}
           </div>
         </div>
 
