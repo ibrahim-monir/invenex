@@ -133,6 +133,7 @@ class GoogleBackup:
         self._last_sheet_sync = 0.0
         self._models = []
         self._app = None
+        self._session_factory = None
 
         self.last_error = None
         self.last_upload_at = None
@@ -451,36 +452,53 @@ class GoogleBackup:
 
     def mark_dirty(self):
         self._dirty.set()
+        # Self-heal: if the loop ever dies from something the broad except
+        # below didn't anticipate, the next commit brings it back instead of
+        # backups silently stopping until someone checks /backup-status.
+        if (
+            self._worker is not None
+            and not self._stopping.is_set()
+            and not self._worker.is_alive()
+        ):
+            self._spawn_worker()
 
-    def start_worker(self, session_factory):
-        if not self.enabled or self._worker is not None:
-            return
-
+    def _spawn_worker(self):
         def run():
             while not self._stopping.is_set():
-                # Wake on a change, but also tick regularly so the Sheets
-                # mirror still refreshes on its own schedule.
-                self._dirty.wait(timeout=self.sheet_interval)
-                if self._stopping.is_set():
-                    break
-                if not self._dirty.is_set():
-                    continue
-                # Let a burst of writes settle into a single upload.
-                self._stopping.wait(self.debounce)
-                self._dirty.clear()
                 try:
-                    self.flush(session_factory)
+                    # Wake on a change, but also tick so a dropped signal
+                    # cannot leave the loop parked forever.
+                    self._dirty.wait(timeout=self.sheet_interval or 60)
+                    if self._stopping.is_set():
+                        break
+                    if not self._dirty.is_set():
+                        continue
+                    # Let a burst of writes settle into a single upload.
+                    self._stopping.wait(self.debounce)
+                    self._dirty.clear()
+                    self.flush(self._session_factory)
                 except Exception as exc:
-                    # A dead worker means backups stop with no sign of it, so
-                    # record the failure and keep the loop alive.
+                    # Nothing here may ever exit the loop uncaught — a dead
+                    # worker means backups stop with no sign of it beyond
+                    # this recorded error. Print too, so it shows in host logs
+                    # even if no one is looking at /backup-status.
+                    import traceback
+
+                    traceback.print_exc()
                     self.last_error = f"worker: {exc}"
 
         self._worker = threading.Thread(target=run, name="google-backup", daemon=True)
         self._worker.start()
+
+    def start_worker(self, session_factory):
+        if not self.enabled or self._worker is not None:
+            return
+        self._session_factory = session_factory
+        self._spawn_worker()
         atexit.register(self.shutdown, session_factory)
 
     def flush(self, session_factory=None):
-        """Push the database to Drive, and the tables to Sheets if it is due."""
+        """Push the database to Drive, and the tables to Sheets."""
         import time
 
         with self._lock:
@@ -491,19 +509,18 @@ class GoogleBackup:
                     self.last_error = f"upload: {exc}"
 
             if self.sheets_enabled and session_factory is not None and self._app:
-                due = (time.monotonic() - self._last_sheet_sync) >= self.sheet_interval
-                if due:
-                    # The worker is its own thread, so it needs an application
-                    # context of its own before the scoped session will resolve.
-                    with self._app.app_context():
-                        session = session_factory()
-                        try:
-                            self.sync_sheets(session)
-                            self._last_sheet_sync = time.monotonic()
-                        except Exception as exc:
-                            self.last_error = f"sheets: {exc}"
-                        finally:
-                            session.close()
+                # Every flush syncs Sheets now (a flush only happens after a
+                # commit, debounced), so the mirror is current within one
+                # debounce window instead of waiting on a fixed interval.
+                with self._app.app_context():
+                    session = session_factory()
+                    try:
+                        self.sync_sheets(session)
+                        self._last_sheet_sync = time.monotonic()
+                    except Exception as exc:
+                        self.last_error = f"sheets: {exc}"
+                    finally:
+                        session.close()
 
     def shutdown(self, session_factory=None):
         """Final upload on exit so the last few writes are never lost."""

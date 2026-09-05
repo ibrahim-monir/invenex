@@ -390,6 +390,22 @@ def backup_status():
     }
 
 
+@app.route("/backup-sync-now")
+@login_required
+def backup_sync_now():
+    """Push to Drive and Sheets immediately instead of waiting for a commit."""
+    handler = google_backup.backup
+    if handler is None or not handler.enabled:
+        return {"synced": False, "why": "Backup is not configured."}
+
+    handler.flush(db.session)
+    return {
+        "synced": not handler.last_error,
+        "last_upload_at": handler.last_upload_at.isoformat() if handler.last_upload_at else None,
+        "last_error": handler.last_error,
+    }
+
+
 @app.route("/inventory")
 @login_required
 def inventory():
